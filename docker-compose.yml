@@ -1,0 +1,165 @@
+# docker-compose.yml — Despacho dev local
+#
+# Uso básico (solo BD):
+#   docker compose up -d
+#
+# Con proveedor de rutas OSRM (requiere ./data/osrm/mexico-latest.osrm):
+#   docker compose --profile osrm up -d
+#
+# Con Valhalla (descarga y construye tiles ~30 min la primera vez):
+#   docker compose --profile valhalla up -d
+#
+# Con PgAdmin (UI para explorar la BD):
+#   docker compose --profile tools up -d
+#
+# Con Jupyter (notebooks de ML / análisis):
+#   docker compose --profile tools up -d
+#
+# Todo a la vez:
+#   docker compose --profile osrm --profile tools up -d
+
+services:
+
+  # ── PostgreSQL 16 + PostGIS 3.4 ───────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: despacho-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-despacho}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-despacho}
+      POSTGRES_DB: ${POSTGRES_DB:-despacho_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-despacho} -d ${POSTGRES_DB:-despacho_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - despacho-network
+
+  # ── Redis (cache / rate limiting — opcional en código actual) ─────────────
+  redis:
+    image: redis:7-alpine
+    container_name: despacho-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - despacho-network
+
+  # ── PgAdmin — UI para explorar la BD ─────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: despacho-pgadmin
+    restart: unless-stopped
+    profiles: [tools]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@despacho.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"       # modo desktop — no pide login
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./scripts/pgadmin-servers.json:/pgadmin4/servers.json:ro  # pre-configura conexión a postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - despacho-network
+
+  # ── Jupyter — notebooks ML y análisis de demanda ──────────────────────────
+  jupyter:
+    image: jupyter/scipy-notebook:latest
+    container_name: despacho-jupyter
+    profiles: [tools]
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-despacho-dev}
+    ports:
+      - "${JUPYTER_PORT:-8888}:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/work/notebooks
+      - ./data:/home/jovyan/work/data
+      - ./services/core/src:/home/jovyan/work/src
+    networks:
+      - despacho-network
+    command: start-notebook.sh --NotebookApp.token='${JUPYTER_TOKEN:-despacho-dev}'
+
+  # ── OSRM — proveedor de rutas (requiere datos pre-procesados) ─────────────
+  # Setup previo:
+  #   mkdir -p data/osrm
+  #   wget -P data/osrm https://download.geofabrik.de/north-america/mexico-latest.osm.pbf
+  #   docker run -t -v $(pwd)/data/osrm:/data osrm/osrm-backend osrm-extract -p /opt/car.lua /data/mexico-latest.osm.pbf
+  #   docker run -t -v $(pwd)/data/osrm:/data osrm/osrm-backend osrm-partition /data/mexico-latest.osrm
+  #   docker run -t -v $(pwd)/data/osrm:/data osrm/osrm-backend osrm-customize /data/mexico-latest.osrm
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: despacho-osrm
+    profiles: [osrm]
+    restart: unless-stopped
+    ports:
+      - "${OSRM_PORT:-5001}:5000"
+    volumes:
+      - ./data/osrm:/data
+    command: osrm-routed --algorithm mld /data/mexico-latest.osrm --max-table-size 2000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - despacho-network
+
+  # ── Valhalla — proveedor de rutas con tráfico ─────────────────────────────
+  # Primera vez: descarga y procesa tiles de México (~30 min, ~3GB).
+  # Siguientes inicios: reutiliza tiles cacheados en ./data/valhalla.
+  valhalla:
+    image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+    container_name: despacho-valhalla
+    profiles: [valhalla]
+    restart: unless-stopped
+    ports:
+      - "${VALHALLA_PORT:-8002}:8002"
+    volumes:
+      - ./data/valhalla:/custom_files
+    environment:
+      tile_urls: "https://download.geofabrik.de/north-america/mexico-latest.osm.pbf"
+      serve_tiles: "True"
+      server_threads: "2"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8002/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s    # tile build puede tardar varios minutos
+    networks:
+      - despacho-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  despacho-network:
+    driver: bridge

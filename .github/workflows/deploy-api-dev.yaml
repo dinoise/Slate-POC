@@ -1,0 +1,65 @@
+name: "Deploy — API Service (dev)"
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "services/api/**"
+      - "services/core/**"        # core es dependencia de api
+      - "alembic/**"
+      - ".github/workflows/deploy-api-dev.yaml"
+      - ".github/workflows/shared-build-and-push-backend.yaml"
+      - ".github/workflows/shared-deploy-cloudrun.yaml"
+  workflow_dispatch:
+    inputs:
+      skip-tests:
+        description: "Omitir tests (solo en emergencias)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    name: "Test"
+    if: ${{ !inputs.skip-tests }}
+    uses: ./.github/workflows/shared-lint-and-test-backend.yaml
+    with:
+      service-path: services/api
+      coverage-threshold: 70
+
+  build:
+    name: "Build"
+    needs: [test]
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    uses: ./.github/workflows/shared-build-and-push-backend.yaml
+    with:
+      service-path: services/api
+      registry: us-central1-docker.pkg.dev
+      tag: dev
+      environment: dev
+    secrets:
+      project-id: ${{ secrets.GCP_PROJECT_ID }}
+      workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+
+  deploy:
+    name: "Deploy"
+    needs: [build]
+    uses: ./.github/workflows/shared-deploy-cloudrun.yaml
+    with:
+      image-full: ${{ needs.build.outputs.image-full }}
+      service-name: despacho-api-dev
+      region: us-central1
+      environment: dev
+      memory: 512Mi
+      cpu: "1"
+      min-instances: 0
+      max-instances: 5
+      timeout: 300s
+      run-migrations: true
+    secrets:
+      project-id: ${{ secrets.GCP_PROJECT_ID }}
+      workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      database-url: ${{ secrets.DATABASE_URL_DEV }}

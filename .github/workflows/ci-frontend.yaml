@@ -1,0 +1,66 @@
+name: "CI — Frontend"
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/ci-frontend.yaml"
+      - ".github/workflows/shared-lint-and-test-frontend.yaml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/ci-frontend.yaml"
+      - ".github/workflows/shared-lint-and-test-frontend.yaml"
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  test-admin:
+    name: "Admin App"
+    uses: ./.github/workflows/shared-lint-and-test-frontend.yaml
+    with:
+      app-path: apps/admin
+      coverage-threshold: 70
+
+  test-reporter:
+    name: "Reporter App"
+    uses: ./.github/workflows/shared-lint-and-test-frontend.yaml
+    with:
+      app-path: apps/reporter
+      coverage-threshold: 70
+
+  test-adjuster:
+    name: "Adjuster App"
+    uses: ./.github/workflows/shared-lint-and-test-frontend.yaml
+    with:
+      app-path: apps/adjuster
+      coverage-threshold: 70
+
+  all-frontend-pass:
+    name: "All Frontend Tests Pass"
+    needs: [test-admin, test-reporter, test-adjuster]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Verificar resultados
+        run: |
+          ADMIN="${{ needs.test-admin.result }}"
+          REPORTER="${{ needs.test-reporter.result }}"
+          ADJUSTER="${{ needs.test-adjuster.result }}"
+          echo "admin=${ADMIN} | reporter=${REPORTER} | adjuster=${ADJUSTER}"
+          if [ "$ADMIN" = "failure" ] || [ "$REPORTER" = "failure" ] || [ "$ADJUSTER" = "failure" ]; then
+            echo "❌ Una o más apps frontend fallaron"
+            exit 1
+          fi
+          echo "✅ Todas las apps frontend pasaron"

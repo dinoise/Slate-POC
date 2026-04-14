@@ -1,0 +1,138 @@
+name: "[Shared] Deploy — Cloud Run"
+
+on:
+  workflow_call:
+    inputs:
+      image-full:
+        description: "Imagen completa con tag, e.g. us-central1-docker.pkg.dev/proj/despacho/api:dev-abc1234-1234567890"
+        required: true
+        type: string
+      service-name:
+        description: "Nombre del servicio Cloud Run"
+        required: true
+        type: string
+      region:
+        required: false
+        type: string
+        default: "us-central1"
+      environment:
+        required: false
+        type: string
+        default: "dev"
+      memory:
+        required: false
+        type: string
+        default: "512Mi"
+      cpu:
+        required: false
+        type: string
+        default: "1"
+      min-instances:
+        required: false
+        type: number
+        default: 0
+      max-instances:
+        required: false
+        type: number
+        default: 5
+      timeout:
+        required: false
+        type: string
+        default: "300s"
+      allow-unauthenticated:
+        required: false
+        type: boolean
+        default: true
+      run-migrations:
+        description: "Ejecutar alembic upgrade head antes del deploy"
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      project-id:
+        required: true
+      workload-identity-provider:
+        required: true
+      database-url:
+        required: false
+    outputs:
+      service-url:
+        value: ${{ jobs.deploy.outputs.service-url }}
+
+jobs:
+  deploy:
+    name: "Deploy → Cloud Run (${{ inputs.service-name }})"
+    runs-on: ubuntu-latest
+    outputs:
+      service-url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciales GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.workload-identity-provider }}
+          service_account: poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com
+
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.project-id }}
+
+      - name: Ejecutar migraciones Alembic
+        if: inputs.run-migrations && secrets.database-url != ''
+        run: |
+          echo "🗄️ Ejecutando migraciones..."
+          uv run alembic upgrade head
+        env:
+          DATABASE_URL: ${{ secrets.database-url }}
+
+      - name: Deploy a Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ inputs.service-name }}
+          image: ${{ inputs.image-full }}
+          region: ${{ inputs.region }}
+          flags: >-
+            --memory=${{ inputs.memory }}
+            --cpu=${{ inputs.cpu }}
+            --min-instances=${{ inputs.min-instances }}
+            --max-instances=${{ inputs.max-instances }}
+            --timeout=${{ inputs.timeout }}
+            --set-env-vars=ENVIRONMENT=${{ inputs.environment }}
+            ${{ inputs.allow-unauthenticated && '--allow-unauthenticated' || '--no-allow-unauthenticated' }}
+
+      - name: Health check
+        run: |
+          SERVICE_URL="${{ steps.deploy.outputs.url }}"
+          echo "🔍 Health check → ${SERVICE_URL}/health"
+          MAX_ATTEMPTS=5
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            if curl -sf "${SERVICE_URL}/health" > /dev/null 2>&1; then
+              echo "✅ Health check OK (intento ${ATTEMPT})"
+              exit 0
+            fi
+            echo "⏳ Intento ${ATTEMPT}/${MAX_ATTEMPTS} fallido — esperando 5s..."
+            sleep 5
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+          echo "❌ Health check falló después de ${MAX_ATTEMPTS} intentos"
+          exit 1
+
+      - name: Resumen de deploy
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          EMOJI="✅"
+          if [ "$STATUS" != "success" ]; then EMOJI="❌"; fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "${EMOJI} Deploy ${{ inputs.service-name }} — ${STATUS}"
+          echo "🔗 URL: ${{ steps.deploy.outputs.url }}"
+          echo "🐳 Image: ${{ inputs.image-full }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "👤 Actor: ${{ github.actor }}"
+          echo "🔖 Commit: ${{ github.sha }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

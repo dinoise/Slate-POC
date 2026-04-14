@@ -1,0 +1,81 @@
+name: "Deploy — Jobs Service (dev)"
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "services/jobs/**"
+      - "services/core/**"
+      - ".github/workflows/deploy-jobs-dev.yaml"
+      - ".github/workflows/shared-build-and-push-backend.yaml"
+  workflow_dispatch:
+    inputs:
+      skip-tests:
+        description: "Omitir tests"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    name: "Test"
+    if: ${{ !inputs.skip-tests }}
+    uses: ./.github/workflows/shared-lint-and-test-backend.yaml
+    with:
+      service-path: services/jobs
+      coverage-threshold: 60
+
+  build:
+    name: "Build"
+    needs: [test]
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    uses: ./.github/workflows/shared-build-and-push-backend.yaml
+    with:
+      service-path: services/jobs
+      registry: us-central1-docker.pkg.dev
+      tag: dev
+      environment: dev
+    secrets:
+      project-id: ${{ secrets.GCP_PROJECT_ID }}
+      workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+
+  # Jobs se actualiza como Cloud Run Job (no service) — se pushea la imagen
+  # El job se ejecuta bajo demanda via Cloud Tasks, no se "deploya" como servicio
+  push-job-image:
+    name: "Actualizar imagen del Cloud Run Job"
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configurar credenciales GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: poc-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Actualizar imagen del Cloud Run Job
+        run: |
+          gcloud run jobs update despacho-jobs-dev \
+            --image=${{ needs.build.outputs.image-full }} \
+            --region=us-central1 \
+            --project=${{ secrets.GCP_PROJECT_ID }} || \
+          gcloud run jobs create despacho-jobs-dev \
+            --image=${{ needs.build.outputs.image-full }} \
+            --region=us-central1 \
+            --memory=4Gi \
+            --cpu=2 \
+            --task-timeout=7200s \
+            --max-retries=1 \
+            --project=${{ secrets.GCP_PROJECT_ID }}
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Cloud Run Job actualizado"
+          echo "🐳 Image: ${{ needs.build.outputs.image-full }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

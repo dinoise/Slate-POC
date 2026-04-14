@@ -1,0 +1,38 @@
+name: "Deploy — Reporter App (dev)"
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "apps/reporter/**"
+      - "packages/**"
+      - ".github/workflows/deploy-reporter-dev.yaml"
+      - ".github/workflows/shared-build-and-push-frontend.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    name: "Test"
+    uses: ./.github/workflows/shared-lint-and-test-frontend.yaml
+    with:
+      app-path: apps/reporter
+      coverage-threshold: 70
+
+  build-and-deploy:
+    name: "Build & Deploy"
+    needs: [test]
+    uses: ./.github/workflows/shared-build-and-push-frontend.yaml
+    with:
+      app-path: apps/reporter
+      bucket: despacho-app-dev
+      bucket-prefix: reporter
+      environment: dev
+    secrets:
+      project-id: ${{ secrets.GCP_PROJECT_ID }}
+      workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      vite-api-base-url: ${{ secrets.VITE_API_BASE_URL_DEV }}
+      vite-notifications-url: ""   # reporter no usa SSE

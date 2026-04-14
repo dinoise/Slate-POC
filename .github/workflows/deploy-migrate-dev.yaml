@@ -1,0 +1,71 @@
+name: "Deploy — Migrations (dev)"
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "alembic/**"
+      - ".github/workflows/deploy-migrate-dev.yaml"
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: "Revisión alembic (default: head)"
+        type: string
+        default: "head"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  migrate:
+    name: "Alembic upgrade"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Setup Python
+        run: uv python install 3.12
+
+      - name: Instalar dependencias
+        run: uv sync --all-packages
+
+      - name: Mostrar historial de migraciones
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
+        run: |
+          echo "📋 Migraciones pendientes:"
+          uv run alembic history --verbose | head -20
+
+      - name: Ejecutar migraciones
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
+        run: |
+          REVISION="${{ inputs.revision || 'head' }}"
+          echo "🗄️ Ejecutando: alembic upgrade ${REVISION}"
+          uv run alembic upgrade "${REVISION}"
+
+      - name: Verificar estado post-migración
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
+        run: |
+          echo "✅ Estado actual:"
+          uv run alembic current --verbose
+
+      - name: Resumen
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          EMOJI="✅"
+          if [ "$STATUS" != "success" ]; then EMOJI="❌"; fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "${EMOJI} Migraciones — ${STATUS}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "👤 Actor: ${{ github.actor }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

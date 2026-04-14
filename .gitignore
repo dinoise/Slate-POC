@@ -1,0 +1,76 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.uv/
+*.egg-info/
+dist/
+build/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ── Node / pnpm ───────────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+apps/*/dist/
+apps/*/coverage/
+packages/*/dist/
+
+# ── Variables de entorno ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.development
+.env.staging
+.env.production
+apps/*/.env*
+!apps/*/.env.example
+!.env.example
+
+# ── Datos y modelos ML ────────────────────────────────────────────────────────
+data/osrm/
+data/valhalla/
+*.osm.pbf
+*.osrm
+*.osrm.*
+models/*.pkl
+models/*.joblib
+models/*.onnx
+notebooks/.ipynb_checkpoints/
+
+# ── Alembic ───────────────────────────────────────────────────────────────────
+# No ignorar versions/ — las migraciones van al repo
+alembic/__pycache__/
+
+# ── Credenciales y keys ───────────────────────────────────────────────────────
+*.json.key
+*-key.json
+poc-deployer-key.json
+service-account*.json
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+# Volúmenes locales (si se usan bind mounts)
+postgres-data/
+redis-data/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/

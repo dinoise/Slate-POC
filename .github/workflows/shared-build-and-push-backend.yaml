@@ -1,0 +1,97 @@
+name: "[Shared] Build & Push — Backend"
+
+on:
+  workflow_call:
+    inputs:
+      service-path:
+        description: "Path del servicio, e.g. services/api"
+        required: true
+        type: string
+      registry:
+        description: "Registry base, e.g. us-central1-docker.pkg.dev"
+        required: true
+        type: string
+      tag:
+        required: false
+        type: string
+        default: "dev"
+      environment:
+        required: false
+        type: string
+        default: "dev"
+      log-level:
+        required: false
+        type: string
+        default: "INFO"
+    secrets:
+      project-id:
+        required: true
+      workload-identity-provider:
+        required: true
+    outputs:
+      image-tag:
+        value: ${{ jobs.build.outputs.image-tag }}
+      image-full:
+        value: ${{ jobs.build.outputs.image-full }}
+      service-name:
+        value: ${{ jobs.build.outputs.service-name }}
+
+jobs:
+  build:
+    name: "Build & Push — ${{ inputs.service-path }}"
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+      image-full: ${{ steps.meta.outputs.image-full }}
+      service-name: ${{ steps.meta.outputs.service-name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generar metadata de imagen
+        id: meta
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          TIMESTAMP=$(date +%s)
+          IMAGE_TAG="${{ inputs.tag }}-${SHORT_SHA}-${TIMESTAMP}"
+          SERVICE_NAME=$(basename ${{ inputs.service-path }})
+          IMAGE_FULL="${{ inputs.registry }}/${{ secrets.project-id }}/despacho/${SERVICE_NAME}:${IMAGE_TAG}"
+          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "image-full=${IMAGE_FULL}" >> $GITHUB_OUTPUT
+          echo "service-name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🐳 Image: ${IMAGE_FULL}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Configurar credenciales GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.workload-identity-provider }}
+          service_account: poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com
+
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.project-id }}
+
+      - name: Autenticar Docker con Artifact Registry
+        run: gcloud auth configure-docker ${{ inputs.registry }} --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build y push imagen Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ inputs.service-path }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.image-full }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.image-tag }}
+            ENVIRONMENT=${{ inputs.environment }}
+            LOG_LEVEL=${{ inputs.log-level }}

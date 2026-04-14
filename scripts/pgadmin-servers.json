@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "despacho-dev",
+      "Group": "Despacho",
+      "Host": "despacho-postgres",
+      "Port": 5432,
+      "MaintenanceDB": "despacho_dev",
+      "Username": "despacho",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpassfile"
+    }
+  }
+}

@@ -1,0 +1,143 @@
+name: "[Shared] Lint & Test — Backend"
+
+on:
+  workflow_call:
+    inputs:
+      service-path:
+        description: "Path del servicio, e.g. services/api"
+        required: true
+        type: string
+      python-version:
+        required: false
+        type: string
+        default: "3.12"
+      coverage-threshold:
+        required: false
+        type: number
+        default: 70
+    outputs:
+      coverage-percentage:
+        value: ${{ jobs.lint-and-test.outputs.coverage-percentage }}
+      tests-passed:
+        value: ${{ jobs.lint-and-test.outputs.tests-passed }}
+
+jobs:
+  lint-and-test:
+    name: "Lint & Test — ${{ inputs.service-path }}"
+    runs-on: ubuntu-latest
+    outputs:
+      coverage-percentage: ${{ steps.coverage.outputs.percentage }}
+      tests-passed: ${{ steps.tests.outputs.passed }}
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: despacho
+          POSTGRES_PASSWORD: despacho
+          POSTGRES_DB: despacho_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Setup Python ${{ inputs.python-version }}
+        run: uv python install ${{ inputs.python-version }}
+
+      - name: Instalar dependencias
+        run: uv sync --all-packages
+
+      - name: Lint (ruff check)
+        run: uv run ruff check ${{ inputs.service-path }}/src/
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check ${{ inputs.service-path }}/src/
+
+      - name: Tests con coverage
+        id: tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://despacho:despacho@localhost:5432/despacho_test
+        run: |
+          uv run pytest ${{ inputs.service-path }}/ \
+            --cov=${{ inputs.service-path }}/src \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=${{ inputs.coverage-threshold }} \
+            -q
+          echo "passed=true" >> $GITHUB_OUTPUT
+
+      - name: Extraer porcentaje de coverage
+        id: coverage
+        if: always()
+        run: |
+          COVERAGE=$(python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          print(f\"{float(root.attrib['line-rate']) * 100:.2f}\")
+          " 2>/dev/null || echo "0")
+          echo "percentage=${COVERAGE}" >> $GITHUB_OUTPUT
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ inputs.service-path }}-${{ github.sha }}
+          path: coverage.xml
+          retention-days: 7
+
+      - name: Comentar coverage en PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const coverage = '${{ steps.coverage.outputs.percentage }}';
+            const passed = '${{ steps.tests.outputs.passed }}' === 'true';
+            const emoji = passed ? '✅' : '❌';
+            const body = [
+              `## ${emoji} Tests Results — \`${{ inputs.service-path }}\``,
+              '',
+              `| Métrica | Valor |`,
+              `|---------|-------|`,
+              `| Coverage | ${coverage}% |`,
+              `| Umbral | ${{ inputs.coverage-threshold }}% |`,
+              `| Estado | ${passed ? '✅ PASS' : '❌ FAIL'} |`,
+              '',
+              `> Commit: \`${context.sha.slice(0,7)}\``,
+            ].join('\n');
+
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.data.find(c =>
+              c.user.type === 'Bot' &&
+              c.body.includes('Tests Results') &&
+              c.body.includes('${{ inputs.service-path }}')
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
