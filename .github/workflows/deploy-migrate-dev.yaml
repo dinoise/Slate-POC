@@ -15,57 +15,159 @@ on:
 
 permissions:
   contents: read
-  id-token: write
+  id-token: write   # requerido para Workload Identity Federation
+
+env:
+  GCE_INSTANCE: slate-poc-db
+  GCE_ZONE: us-south1-c
+  GCE_PG_PORT: 5432
+  LOCAL_TUNNEL_PORT: 15432   # puerto local distinto para evitar conflictos
 
 jobs:
   migrate:
-    name: "Alembic upgrade"
+    name: "Alembic upgrade via IAP tunnel"
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
+      # ── Auth GCP via Workload Identity Federation ──────────────────────────
+      # No usa JSON keys — el OIDC token de GitHub se intercambia por
+      # credenciales GCP de corta duración (1 hora).
+      # El SA poc-deployer necesita:
+      #   roles/iap.tunnelResourceAccessor
+      #   roles/compute.instanceAdmin.v1
+      - name: Autenticar en GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: poc-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      # ── Túnel IAP ──────────────────────────────────────────────────────────
+      # Crea un túnel cifrado HTTPS desde el runner hasta el puerto 5432 de
+      # la VM. La VM no necesita IP pública ni el puerto expuesto al internet.
+      # El & ejecuta el túnel en background; el sleep da tiempo de establecerse.
+      - name: Abrir túnel IAP a PostgreSQL
+        run: |
+          gcloud compute start-iap-tunnel "${{ env.GCE_INSTANCE }}" "${{ env.GCE_PG_PORT }}" \
+            --local-host-port=localhost:${{ env.LOCAL_TUNNEL_PORT }} \
+            --zone="${{ env.GCE_ZONE }}" \
+            --project="${{ secrets.GCP_PROJECT_ID }}" &
+          echo "IAP_TUNNEL_PID=$!" >> "$GITHUB_ENV"
+          echo "Esperando que el túnel IAP establezca conexión..."
+          sleep 5
+
+      # ── Python + dependencias ──────────────────────────────────────────────
       - name: Instalar uv
         uses: astral-sh/setup-uv@v4
         with:
           version: "latest"
 
       - name: Setup Python
-        run: uv python install 3.12
+        run: uv python install 3.11
 
       - name: Instalar dependencias
         run: uv sync --all-packages
 
-      - name: Mostrar historial de migraciones
+      # ── Pre-vuelo: validaciones antes de migrar ────────────────────────────
+      - name: Verificar heads únicos
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
+          DATABASE_URL: postgresql+asyncpg://${{ secrets.DB_USER_DEV }}:${{ secrets.DB_PASSWORD_DEV }}@localhost:${{ env.LOCAL_TUNNEL_PORT }}/${{ secrets.DB_NAME_DEV }}
         run: |
-          echo "📋 Migraciones pendientes:"
-          uv run alembic history --verbose | head -20
+          HEAD_COUNT=$(uv run alembic heads 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$HEAD_COUNT" -gt 1 ]; then
+            echo "ERROR: Se detectaron $HEAD_COUNT migration heads. Hay un conflicto de ramas."
+            echo "Heads encontrados:"
+            uv run alembic heads
+            echo ""
+            echo "Solución: ejecutar localmente y commitear el merge:"
+            echo "  uv run alembic merge heads -m 'merge description'"
+            exit 1
+          fi
+          echo "Head único confirmado."
 
+      - name: Estado actual de la base de datos
+        env:
+          DATABASE_URL: postgresql+asyncpg://${{ secrets.DB_USER_DEV }}:${{ secrets.DB_PASSWORD_DEV }}@localhost:${{ env.LOCAL_TUNNEL_PORT }}/${{ secrets.DB_NAME_DEV }}
+        run: |
+          echo "── alembic_version en la BD ────────────────────────"
+          # Query directo a alembic_version — fuente de verdad absoluta
+          PSQL_URL="postgresql://${{ secrets.DB_USER_DEV }}:${{ secrets.DB_PASSWORD_DEV }}@localhost:${{ env.LOCAL_TUNNEL_PORT }}/${{ secrets.DB_NAME_DEV }}"
+          psql "$PSQL_URL" -c "SELECT version_num FROM alembic_version ORDER BY version_num;" 2>/dev/null \
+            || echo "(tabla alembic_version no existe aún — primera migración)"
+          echo ""
+          echo "── alembic current ─────────────────────────────────"
+          uv run alembic current --verbose
+          echo ""
+          echo "── alembic heads (scripts) ─────────────────────────"
+          uv run alembic heads --verbose
+
+      # ── Migración con rollback automático ─────────────────────────────────
       - name: Ejecutar migraciones
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
+          DATABASE_URL: postgresql+asyncpg://${{ secrets.DB_USER_DEV }}:${{ secrets.DB_PASSWORD_DEV }}@localhost:${{ env.LOCAL_TUNNEL_PORT }}/${{ secrets.DB_NAME_DEV }}
         run: |
           REVISION="${{ inputs.revision || 'head' }}"
-          echo "🗄️ Ejecutando: alembic upgrade ${REVISION}"
-          uv run alembic upgrade "${REVISION}"
 
+          # Guardar revisión actual para rollback en caso de fallo
+          BEFORE=$(uv run alembic current 2>/dev/null | grep -oE '[a-f0-9]{12}' | head -1 || echo "base")
+          echo "Revisión antes de migrar: ${BEFORE:-<base>}"
+          echo "Migrando a: $REVISION"
+
+          if uv run alembic upgrade "$REVISION"; then
+            echo "Migración exitosa."
+          else
+            echo "ERROR: La migración falló. Intentando rollback a '$BEFORE'..."
+            if [ "$BEFORE" = "base" ]; then
+              uv run alembic downgrade base || echo "Rollback a base falló también."
+            else
+              uv run alembic downgrade "$BEFORE" || echo "Rollback a $BEFORE falló también."
+            fi
+            echo "CRÍTICO: Revisar el estado de la base de datos manualmente."
+            exit 1
+          fi
+
+      # ── Verificación post-migración ────────────────────────────────────────
       - name: Verificar estado post-migración
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
+          DATABASE_URL: postgresql+asyncpg://${{ secrets.DB_USER_DEV }}:${{ secrets.DB_PASSWORD_DEV }}@localhost:${{ env.LOCAL_TUNNEL_PORT }}/${{ secrets.DB_NAME_DEV }}
         run: |
-          echo "✅ Estado actual:"
-          uv run alembic current --verbose
+          echo "── Estado post-migración ───────────────────────────"
+          CURRENT=$(uv run alembic current 2>/dev/null)
+          echo "$CURRENT"
+
+          # Verificar que quedó en head (solo si se migró a head)
+          if [ "${{ inputs.revision || 'head' }}" = "head" ]; then
+            if echo "$CURRENT" | grep -q "(head)"; then
+              echo "La base de datos está en head."
+            else
+              echo "ADVERTENCIA: La migración completó pero la BD no reporta (head)."
+              echo "Esto puede indicar un problema. Revisar manualmente."
+              exit 1
+            fi
+          fi
+
+      # ── Cleanup del túnel ──────────────────────────────────────────────────
+      - name: Cerrar túnel IAP
+        if: always()
+        run: |
+          if [ -n "$IAP_TUNNEL_PID" ]; then
+            kill "$IAP_TUNNEL_PID" 2>/dev/null || true
+            echo "Túnel IAP cerrado (PID: $IAP_TUNNEL_PID)"
+          fi
 
       - name: Resumen
         if: always()
         run: |
           STATUS="${{ job.status }}"
           EMOJI="✅"
-          if [ "$STATUS" != "success" ]; then EMOJI="❌"; fi
+          [ "$STATUS" != "success" ] && EMOJI="❌"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "${EMOJI} Migraciones — ${STATUS}"
-          echo "🌿 Branch: ${{ github.ref_name }}"
-          echo "👤 Actor: ${{ github.actor }}"
+          echo "Branch : ${{ github.ref_name }}"
+          echo "Actor  : ${{ github.actor }}"
+          echo "Revisión: ${{ inputs.revision || 'head' }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

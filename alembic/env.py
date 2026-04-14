@@ -1,5 +1,6 @@
 """Alembic environment configuration for async migrations."""
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -8,9 +9,12 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# Import your models and config
-from slate_api.core.config import settings
+# Solo importamos Base (modelos) — no instanciamos Settings completo.
+# DATABASE_URL se lee directamente de la variable de entorno para que
+# Alembic no dependa de REDIS_URL, SECRET_KEY ni ningún otro campo de app.
 from slate_api.models.base import Base
+
+_DATABASE_URL = os.environ["DATABASE_URL"]  # falla rápido si no está definida
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -45,7 +49,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = str(settings.DATABASE_URL)
+    url = _DATABASE_URL
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -126,7 +130,7 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with async engine."""
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = str(settings.DATABASE_URL)
+    configuration["sqlalchemy.url"] = _DATABASE_URL
 
     connectable = async_engine_from_config(
         configuration,
