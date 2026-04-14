@@ -8,9 +8,9 @@ CREATE EXTENSION IF NOT EXISTS postgis_topology;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Base de datos de tests (para pytest)
-SELECT 'CREATE DATABASE despacho_test OWNER despacho'
-  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'despacho_test')\gexec
+SELECT 'CREATE DATABASE slate_test OWNER slate'
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'slate_test')\gexec
 
-\c despacho_test
+\c slate_test
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

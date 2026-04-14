@@ -28,7 +28,7 @@ jobs:
     uses: ./.github/workflows/shared-build-and-push-frontend.yaml
     with:
       app-path: apps/admin
-      bucket: despacho-app-dev
+      bucket: slate-app-dev
       bucket-prefix: admin
       environment: dev
     secrets:

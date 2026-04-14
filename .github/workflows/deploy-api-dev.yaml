@@ -50,7 +50,7 @@ jobs:
     uses: ./.github/workflows/shared-deploy-cloudrun.yaml
     with:
       image-full: ${{ needs.build.outputs.image-full }}
-      service-name: despacho-api-dev
+      service-name: slate-api-dev
       region: us-central1
       environment: dev
       memory: 512Mi

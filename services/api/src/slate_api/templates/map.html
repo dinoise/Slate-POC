@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ajustador Optimizer — Demo</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- App styles -->
+  <link rel="stylesheet" href="{{ request.url_for('static', path='css/map.css') }}" />
+</head>
+<body>
+
+<header>
+  <span style="font-size:20px">🗺️</span>
+  <h1>Ajustador Optimizer — Demo CDMX</h1>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+    <label style="font-size:11px;color:#94a3b8;">Proveedor</label>
+    <select id="provider-select"
+      onchange="switchProvider(this.value)"
+      style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:3px 6px;font-size:12px;cursor:pointer;">
+      <option value="osrm">OSRM</option>
+      <option value="google">Google Routes</option>
+      <option value="valhalla">Valhalla</option>
+    </select>
+    <span id="provider-badge"
+      style="font-size:10px;padding:2px 8px;border-radius:10px;background:#1e293b;border:1px solid #334155;color:#94a3b8;">
+      —
+    </span>
+    <span style="font-size:11px;color:#475569">Click en el mapa para registrar siniestros</span>
+    <a href="/" style="font-size:11px;color:#64748b;text-decoration:none;padding:3px 8px;border:1px solid #334155;border-radius:4px;">⌂ Inicio</a>
+  </div>
+</header>
+
+<div class="main">
+  <div id="map"></div>
+
+  <div class="sidebar">
+
+    <!-- Mode label -->
+    <div class="sidebar-section">
+      <h2>Modo de colocación</h2>
+      <div class="mode-btns">
+        <button class="mode-btn active-inc" id="btn-inc">
+          <span class="icon">🔴</span>
+          <span>Siniestro</span>
+        </button>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px;">Click en el mapa para registrar un siniestro.</div>
+    </div>
+
+    <!-- Demand predictions -->
+    <div class="sidebar-section">
+      <h2>Demanda Predicha</h2>
+      <div class="demand-toggle-btns">
+        <button class="demand-toggle-btn active" id="btn-demand-heatmap" onclick="setDemandMode('heatmap')">
+          🔥 Heatmap
+        </button>
+        <button class="demand-toggle-btn" id="btn-demand-hexagon" onclick="setDemandMode('hexagon')">
+          ⬡ Hexágonos
+        </button>
+      </div>
+      <div class="demand-slot-row">
+        <select id="sel-hora" onchange="onSlotChange()"></select>
+        <select id="sel-dia" onchange="onSlotChange()">
+          <option value="0">Lunes</option>
+          <option value="1">Martes</option>
+          <option value="2">Miércoles</option>
+          <option value="3">Jueves</option>
+          <option value="4">Viernes</option>
+          <option value="5">Sábado</option>
+          <option value="6">Domingo</option>
+        </select>
+      </div>
+      <button class="demand-vis-btn" id="btn-demand-vis" onclick="toggleDemandVisibility()">
+        👁 Ocultar capa
+      </button>
+      <div class="demand-legend">
+        <div class="demand-legend-item" style="background:#fbbf2433;color:#fbbf24;border:1px solid #fbbf2466;">Baja</div>
+        <div class="demand-legend-item" style="background:#f9731633;color:#f97316;border:1px solid #f9731666;">Media</div>
+        <div class="demand-legend-item" style="background:#dc262633;color:#dc2626;border:1px solid #dc262666;">Alta</div>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div id="status-box">Listo. Coloca ajustadores y siniestros.</div>
+
+    <!-- Counters -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="val" id="cnt-adj">0</div>
+        <div class="lbl">Ajustadores</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" id="cnt-inc">0</div>
+        <div class="lbl">Siniestros</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" id="cnt-asgn">0</div>
+        <div class="lbl">Asignados</div>
+      </div>
+    </div>
+
+    <!-- Candidates list -->
+    <div class="sidebar-section" style="padding-bottom:8px; border-bottom:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+        <h2 style="margin:0;white-space:nowrap;">Candidatos</h2>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <label style="font-size:10px;color:#64748b;">máx</label>
+
+        <input type="number" id="max-travel-min" value="60" min="5" max="480" step="5"
+          title="Tiempo máximo de viaje (min)"
+          style="width:44px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:2px 4px;font-size:12px;">
+        <label style="font-size:10px;color:#64748b;">min</label>
+        <label style="font-size:10px;color:#334155;">|</label>
+
+        <input type="number" id="search-radius-km" value="30" min="1" max="200" step="5"
+          title="Radio de búsqueda (km)"
+          style="width:44px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:2px 4px;font-size:12px;">
+        <label style="font-size:10px;color:#64748b;">km</label>
+        
+        <input type="number" id="top-k" value="5" min="1" max="200" step="1"
+          title="Top de candidatos a mostrar"
+          style="width:44px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:2px 4px;font-size:12px;">
+        <label style="font-size:10px;color:#64748b;">ajust</label>
+
+      </div>
+    </div>
+    <div class="adj-list" id="adj-list">
+      <div style="font-size:12px; color:#475569; padding:8px;">Sin siniestros aún.</div>
+    </div>
+
+    <!-- Positioning panel -->
+    <div class="sidebar-section">
+      <h2>Posicionamiento Dinámico</h2>
+      <button class="pos-btn pos-btn-load" id="btn-pos-load" onclick="loadInitialPositions()">
+        📍 Cargar estado inicial
+      </button>
+      <button class="pos-btn pos-btn-optimize" id="btn-pos-optimize" onclick="optimizePositions()" disabled>
+        ⚡ Optimizar posicionamiento
+      </button>
+      <button class="pos-btn pos-btn-movements" id="btn-pos-movements" onclick="toggleMovements()" disabled>
+        ↔ Ver movimientos
+      </button>
+      <!-- Spread factor control -->
+      <div class="pos-spread-row">
+        <label class="pos-spread-label" for="spread-factor">
+          Dispersión
+          <span class="pos-spread-hint" title="0 = concentrar en zonas de máxima demanda&#10;1 = máxima cobertura territorial (p-median)">ⓘ</span>
+        </label>
+        <input
+          type="range" id="spread-factor"
+          min="0" max="1" step="0.1" value="0.5"
+        >
+        <span class="pos-spread-value" id="spread-value">0.5</span>
+      </div>
+      <div class="pos-info" id="pos-info">Carga el estado inicial para comenzar.</div>
+    </div>
+
+    <!-- Reset route -->
+    <div class="reset-btn" onclick="clearRoute()">🗑️ Limpiar ruta</div>
+
+    <!-- Clear all buttons -->
+    <div class="clear-btns">
+      <button class="clear-btn" id="btn-clear-adj" onclick="clearAllAdjusters()">
+        🔵 Borrar ajustadores
+      </button>
+      <button class="clear-btn" id="btn-clear-inc" onclick="clearAllIncidents()">
+        🔴 Borrar siniestros
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet Polyline Util (OSRM polyline decode) -->
+<script src="https://unpkg.com/polyline-encoded@0.0.9/Polyline.encoded.js"></script>
+<!-- Leaflet AntPath -->
+<script src="https://unpkg.com/leaflet-ant-path@1.3.0/dist/leaflet-ant-path.js"></script>
+<!-- Leaflet Heat -->
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<!-- H3 JS -->
+<script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+<!-- Shared route utilities -->
+<script src="{{ request.url_for('static', path='js/route-utils.js') }}?v={{ range(1000000)|random }}"></script>
+<!-- App JS -->
+<script src="{{ request.url_for('static', path='js/map.js') }}?v={{ range(1000000)|random }}"></script>
+
+</body>
+</html>

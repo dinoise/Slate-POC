@@ -28,7 +28,7 @@ jobs:
     uses: ./.github/workflows/shared-build-and-push-frontend.yaml
     with:
       app-path: apps/adjuster
-      bucket: despacho-app-dev
+      bucket: slate-app-dev
       bucket-prefix: adjuster
       environment: dev
     secrets:

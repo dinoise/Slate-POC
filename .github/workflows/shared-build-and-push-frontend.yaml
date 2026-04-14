@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       bucket:
-        description: "Nombre del bucket GCS, e.g. despacho-app-dev"
+        description: "Nombre del bucket GCS, e.g. slate-app-dev"
         required: true
         type: string
       bucket-prefix:

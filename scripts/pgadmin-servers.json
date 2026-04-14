@@ -1,12 +1,12 @@
 {
   "Servers": {
     "1": {
-      "Name": "despacho-dev",
+      "Name": "slate-dev",
       "Group": "Despacho",
-      "Host": "despacho-postgres",
+      "Host": "slate-postgres",
       "Port": 5432,
-      "MaintenanceDB": "despacho_dev",
-      "Username": "despacho",
+      "MaintenanceDB": "slate_dev",
+      "Username": "slate",
       "SSLMode": "prefer",
       "PassFile": "/tmp/pgpassfile"
     }

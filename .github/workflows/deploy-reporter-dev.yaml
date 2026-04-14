@@ -28,7 +28,7 @@ jobs:
     uses: ./.github/workflows/shared-build-and-push-frontend.yaml
     with:
       app-path: apps/reporter
-      bucket: despacho-app-dev
+      bucket: slate-app-dev
       bucket-prefix: reporter
       environment: dev
     secrets:

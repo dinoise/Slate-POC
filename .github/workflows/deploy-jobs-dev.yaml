@@ -62,11 +62,11 @@ jobs:
 
       - name: Actualizar imagen del Cloud Run Job
         run: |
-          gcloud run jobs update despacho-jobs-dev \
+          gcloud run jobs update slate-jobs-dev \
             --image=${{ needs.build.outputs.image-full }} \
             --region=us-central1 \
             --project=${{ secrets.GCP_PROJECT_ID }} || \
-          gcloud run jobs create despacho-jobs-dev \
+          gcloud run jobs create slate-jobs-dev \
             --image=${{ needs.build.outputs.image-full }} \
             --region=us-central1 \
             --memory=4Gi \

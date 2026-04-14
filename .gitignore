@@ -24,13 +24,10 @@ packages/*/dist/
 
 # ── Variables de entorno ──────────────────────────────────────────────────────
 .env
-.env.local
-.env.development
-.env.staging
-.env.production
+.env.*
+!.env.example
 apps/*/.env*
 !apps/*/.env.example
-!.env.example
 
 # ── Datos y modelos ML ────────────────────────────────────────────────────────
 data/osrm/

@@ -1,0 +1,28 @@
+[project]
+name = "slate-jobs"
+version = "0.1.0"
+description = "Background jobs for Despacho — demand prediction, scheduled optimization"
+requires-python = ">=3.11"
+dependencies = [
+    # Internal workspace packages
+    "slate-core",
+    # Database
+    "sqlalchemy>=2.0.25",
+    "asyncpg>=0.29.0",
+    "pydantic-settings>=2.1.0",
+    # ML & Data (demand prediction jobs)
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    # HTTP Client
+    "httpx>=0.26.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/slate_jobs"]
+
+[tool.uv.sources]
+slate-core = { workspace = true }

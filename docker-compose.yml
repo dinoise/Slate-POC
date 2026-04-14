@@ -23,30 +23,31 @@ services:
   # ── PostgreSQL 16 + PostGIS 3.4 ───────────────────────────────────────────
   postgres:
     image: postgis/postgis:16-3.4
-    container_name: despacho-postgres
+    platform: linux/amd64
+    container_name: slate-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-despacho}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-despacho}
-      POSTGRES_DB: ${POSTGRES_DB:-despacho_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-slate}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-slate}
+      POSTGRES_DB: ${POSTGRES_DB:-slate_dev}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-despacho} -d ${POSTGRES_DB:-despacho_dev}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-slate} -d ${POSTGRES_DB:-slate_dev}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     networks:
-      - despacho-network
+      - slate-network
 
   # ── Redis (cache / rate limiting — opcional en código actual) ─────────────
   redis:
     image: redis:7-alpine
-    container_name: despacho-redis
+    container_name: slate-redis
     restart: unless-stopped
     ports:
       - "${REDIS_PORT:-6379}:6379"
@@ -59,16 +60,16 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - despacho-network
+      - slate-network
 
   # ── PgAdmin — UI para explorar la BD ─────────────────────────────────────
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: despacho-pgadmin
+    container_name: slate-pgadmin
     restart: unless-stopped
     profiles: [tools]
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@despacho.local}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@slate.local}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_CONFIG_SERVER_MODE: "False"       # modo desktop — no pide login
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
@@ -81,16 +82,16 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - despacho-network
+      - slate-network
 
   # ── Jupyter — notebooks ML y análisis de demanda ──────────────────────────
   jupyter:
     image: jupyter/scipy-notebook:latest
-    container_name: despacho-jupyter
+    container_name: slate-jupyter
     profiles: [tools]
     environment:
       JUPYTER_ENABLE_LAB: "yes"
-      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-despacho-dev}
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-slate-dev}
     ports:
       - "${JUPYTER_PORT:-8888}:8888"
     volumes:
@@ -98,8 +99,8 @@ services:
       - ./data:/home/jovyan/work/data
       - ./services/core/src:/home/jovyan/work/src
     networks:
-      - despacho-network
-    command: start-notebook.sh --NotebookApp.token='${JUPYTER_TOKEN:-despacho-dev}'
+      - slate-network
+    command: start-notebook.sh --NotebookApp.token='${JUPYTER_TOKEN:-slate-dev}'
 
   # ── OSRM — proveedor de rutas (requiere datos pre-procesados) ─────────────
   # Setup previo:
@@ -110,7 +111,7 @@ services:
   #   docker run -t -v $(pwd)/data/osrm:/data osrm/osrm-backend osrm-customize /data/mexico-latest.osrm
   osrm:
     image: osrm/osrm-backend:latest
-    container_name: despacho-osrm
+    container_name: slate-osrm
     profiles: [osrm]
     restart: unless-stopped
     ports:
@@ -125,14 +126,14 @@ services:
       retries: 3
       start_period: 5s
     networks:
-      - despacho-network
+      - slate-network
 
   # ── Valhalla — proveedor de rutas con tráfico ─────────────────────────────
   # Primera vez: descarga y procesa tiles de México (~30 min, ~3GB).
   # Siguientes inicios: reutiliza tiles cacheados en ./data/valhalla.
   valhalla:
     image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
-    container_name: despacho-valhalla
+    container_name: slate-valhalla
     profiles: [valhalla]
     restart: unless-stopped
     ports:
@@ -150,7 +151,7 @@ services:
       retries: 3
       start_period: 60s    # tile build puede tardar varios minutos
     networks:
-      - despacho-network
+      - slate-network
 
 volumes:
   postgres_data:
@@ -161,5 +162,5 @@ volumes:
     driver: local
 
 networks:
-  despacho-network:
+  slate-network:
     driver: bridge
