@@ -1,7 +1,7 @@
 """Schemas for AdjusterPosition."""
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict
 
 
 class AdjusterPositionRead(BaseModel):

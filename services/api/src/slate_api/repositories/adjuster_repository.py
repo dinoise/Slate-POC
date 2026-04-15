@@ -1,8 +1,7 @@
 """Repository for Adjuster model with availability queries."""
-from geoalchemy2.functions import ST_DWithin, ST_MakePoint, ST_SetSRID, ST_GeogFromWKB
-from sqlalchemy import cast
+from geoalchemy2.functions import ST_DWithin, ST_MakePoint, ST_SetSRID
 from geoalchemy2.types import Geography
-from sqlalchemy import select
+from sqlalchemy import cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 

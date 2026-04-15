@@ -82,7 +82,7 @@ async def notification_stream(
                     payload = await asyncio.wait_for(queue.get(), timeout=15.0)
                     enriched = await _enrich_event(payload)
                     yield f"event: assignment\ndata: {json.dumps(enriched)}\n\n"
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Keepalive comment — prevents nginx / browser idle timeout
                     yield ": keepalive\n\n"
 

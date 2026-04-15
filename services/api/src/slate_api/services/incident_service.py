@@ -5,7 +5,6 @@ from geoalchemy2.functions import ST_MakePoint
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from slate_core.geospatial.base import RoutingProvider
-from .assignment_service import AssignmentService
 
 from ..core.database import async_session_maker
 from ..core.exceptions import ConflictError, NotFoundError, ServiceUnavailableError
@@ -16,6 +15,7 @@ from ..repositories.assignment_repository import AssignmentRepository
 from ..repositories.incident_repository import IncidentRepository
 from ..schemas.assignment import AdjusterCoord, IncidentCoord, OptimizeRequest
 from ..schemas.incident import IncidentCreate, IncidentUpdate
+from .assignment_service import AssignmentService
 
 logger = get_logger(__name__)
 

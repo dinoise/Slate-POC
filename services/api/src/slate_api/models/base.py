@@ -1,6 +1,5 @@
 """Base model for all database models."""
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy import DateTime, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
