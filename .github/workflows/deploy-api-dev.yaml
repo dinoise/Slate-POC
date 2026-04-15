@@ -45,17 +45,61 @@ jobs:
     name: "Deploy"
     needs: [build]
     if: needs.build.result == 'success'
-    uses: ./.github/workflows/shared-deploy-cloudrun.yaml
-    with:
-      image-full: ${{ needs.build.outputs.image-full }}
-      service-name: slate-api-dev
-      region: us-central1
-      environment: dev
-      memory: 512Mi
-      cpu: "1"
-      min-instances: 0
-      max-instances: 5
-      timeout: 300s
-    secrets:
-      project-id: ${{ secrets.GCP_PROJECT_ID }}
-      workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciales GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: poc-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Deploy a Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: slate-api-dev
+          image: ${{ needs.build.outputs.image-full }}
+          region: us-central1
+          flags: >-
+            --memory=512Mi
+            --cpu=1
+            --min-instances=0
+            --max-instances=5
+            --timeout=300s
+            --set-env-vars=ENVIRONMENT=dev
+            --allow-unauthenticated
+
+      - name: Health check
+        run: |
+          SERVICE_URL="${{ steps.deploy.outputs.url }}"
+          echo "🔍 Health check → ${SERVICE_URL}/health"
+          for i in 1 2 3 4 5; do
+            if curl -sf "${SERVICE_URL}/health" > /dev/null 2>&1; then
+              echo "✅ Health check OK (intento ${i})"
+              exit 0
+            fi
+            echo "⏳ Intento ${i}/5 — esperando 5s..."
+            sleep 5
+          done
+          echo "❌ Health check falló"
+          exit 1
+
+      - name: Resumen
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          EMOJI="✅"; [ "$STATUS" != "success" ] && EMOJI="❌"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "${EMOJI} Deploy slate-api-dev — ${STATUS}"
+          echo "🔗 URL: ${{ steps.deploy.outputs.url }}"
+          echo "🐳 Image: ${{ needs.build.outputs.image-full }}"
+          echo "🔖 Commit: ${{ github.sha }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

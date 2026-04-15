@@ -45,21 +45,46 @@ jobs:
     name: "Deploy"
     needs: [build]
     if: needs.build.result == 'success'
-    uses: ./.github/workflows/shared-deploy-cloudrun.yaml
-    with:
-      image-full: ${{ needs.build.outputs.image-full }}
-      service-name: slate-notifications-dev
-      region: us-central1
-      environment: dev
-      memory: 512Mi
-      cpu: "0.5"
-      min-instances: 1          # SSE: siempre activo — cold start mataría conexiones activas
-      max-instances: 1          # CRÍTICO: NotificationBroadcaster usa asyncio.Queue en memoria.
-                                # Con >1 instancia, eventos pg_notify llegan a instancia aleatoria
-                                # y los adjusters conectados en otra instancia no los reciben.
-                                # Para escalar horizontalmente: agregar Redis Pub/Sub como broker.
-      timeout: 3600s            # Conexiones SSE long-lived (hasta 1 hora)
-    secrets:
-      project-id: ${{ secrets.GCP_PROJECT_ID }}
-      workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      database-url: ${{ secrets.DATABASE_URL_DEV }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciales GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: poc-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Deploy a Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: slate-notifications-dev
+          image: ${{ needs.build.outputs.image-full }}
+          region: us-central1
+          flags: >-
+            --memory=512Mi
+            --cpu=0.5
+            --min-instances=1
+            --max-instances=1
+            --timeout=3600s
+            --set-env-vars=ENVIRONMENT=dev
+            --allow-unauthenticated
+
+      - name: Resumen
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          EMOJI="✅"; [ "$STATUS" != "success" ] && EMOJI="❌"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "${EMOJI} Deploy slate-notifications-dev — ${STATUS}"
+          echo "🔗 URL: ${{ steps.deploy.outputs.url }}"
+          echo "🐳 Image: ${{ needs.build.outputs.image-full }}"
+          echo "🔖 Commit: ${{ github.sha }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
