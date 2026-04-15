@@ -1,4 +1,5 @@
 """User routes — CRUD for incident reporters."""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
@@ -37,9 +38,7 @@ async def get_user(user_id: int, service: UserServiceDep) -> UserRead:
 
 
 @router.patch("/{user_id}", response_model=UserRead)
-async def update_user(
-    user_id: int, data: UserUpdate, service: UserServiceDep
-) -> UserRead:
+async def update_user(user_id: int, data: UserUpdate, service: UserServiceDep) -> UserRead:
     return UserRead.model_validate(await service.update_user(user_id, data))
 
 

@@ -1,4 +1,5 @@
 """Pydantic schemas for Incident model."""
+
 from datetime import datetime
 from typing import Any
 

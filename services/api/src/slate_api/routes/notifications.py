@@ -1,4 +1,5 @@
 """SSE notification endpoint — real-time assignment events for adjusters."""
+
 from __future__ import annotations
 
 import asyncio
@@ -29,11 +30,7 @@ async def _enrich_event(data: dict) -> dict:
         incident_repo = IncidentRepository(db)
 
         assignment = await assignment_repo.get_by_id(int(data["assignment_id"]))
-        incident = (
-            await incident_repo.get_by_id(int(data["incident_id"]))
-            if assignment
-            else None
-        )
+        incident = await incident_repo.get_by_id(int(data["incident_id"])) if assignment else None
 
         if not assignment or not incident:
             return data  # forward raw payload if lookup fails
@@ -51,9 +48,7 @@ async def _enrich_event(data: dict) -> dict:
             "distance_km": assignment.distance_km,
             "travel_time_minutes": assignment.travel_time_minutes,
             "status": assignment.status,
-            "assigned_at": (
-                assignment.assigned_at.isoformat() if assignment.assigned_at else None
-            ),
+            "assigned_at": (assignment.assigned_at.isoformat() if assignment.assigned_at else None),
         }
 
 

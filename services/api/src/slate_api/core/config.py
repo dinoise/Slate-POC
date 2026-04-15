@@ -1,4 +1,5 @@
 """Application configuration using Pydantic Settings."""
+
 import os
 from functools import lru_cache
 from typing import Any
@@ -55,7 +56,7 @@ class Settings(BaseSettings):
 
     # Routing / Traffic provider
     TRAFFIC_PROVIDER: str = "osrm"  # "osrm" | "valhalla" | "google"
-    TRAFFIC_TOP_K: int = 5          # top-K candidates to rerank with traffic
+    TRAFFIC_TOP_K: int = 5  # top-K candidates to rerank with traffic
 
     # OSRM
     OSRM_URL: str = "http://router.project-osrm.org"

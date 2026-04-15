@@ -1,4 +1,5 @@
 """Pydantic schemas for Assignment model."""
+
 from datetime import datetime
 from typing import Literal
 
@@ -133,9 +134,7 @@ class OptimizeRequest(BaseModel):
     @model_validator(mode="after")
     def validate_inputs(self) -> "OptimizeRequest":
         if not self.use_db and (not self.incidents or not self.adjusters):
-            raise ValueError(
-                "Provide non-empty 'incidents' and 'adjusters', or set use_db=True."
-            )
+            raise ValueError("Provide non-empty 'incidents' and 'adjusters', or set use_db=True.")
         return self
 
 
@@ -146,9 +145,7 @@ class OptimizedAssignment(BaseModel):
     incident_id: int
     travel_time_s: float
     travel_time_min: float
-    assignment_id: int | None = Field(
-        None, description="DB assignment ID (set when persist=True)."
-    )
+    assignment_id: int | None = Field(None, description="DB assignment ID (set when persist=True).")
 
 
 class CandidateResult(BaseModel):

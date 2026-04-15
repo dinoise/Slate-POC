@@ -1,4 +1,5 @@
 """Business logic for User operations."""
+
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,9 +39,7 @@ class UserService:
 
     async def update_user(self, user_id: int, data: UserUpdate) -> User:
         await self.get_user(user_id)
-        updated = await self.repository.update(
-            user_id, **data.model_dump(exclude_unset=True)
-        )
+        updated = await self.repository.update(user_id, **data.model_dump(exclude_unset=True))
         if not updated:
             raise NotFoundError(f"User {user_id} not found")
         return updated

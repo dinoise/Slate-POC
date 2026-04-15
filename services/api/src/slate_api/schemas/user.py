@@ -1,4 +1,5 @@
 """Pydantic schemas for User model."""
+
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field

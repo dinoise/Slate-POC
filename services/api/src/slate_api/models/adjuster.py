@@ -1,4 +1,5 @@
 """Adjuster model for insurance adjusters."""
+
 from typing import TYPE_CHECKING, Any
 
 from geoalchemy2 import Geometry

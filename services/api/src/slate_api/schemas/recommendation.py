@@ -1,4 +1,5 @@
 """Schemas for positioning recommendations."""
+
 from pydantic import BaseModel, Field
 
 

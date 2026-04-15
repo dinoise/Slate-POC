@@ -1,4 +1,5 @@
 """Valhalla routing provider implementation."""
+
 from __future__ import annotations
 
 import logging
@@ -21,7 +22,7 @@ _OUTPUT_PRECISION = 5
 
 def _decode_polyline(encoded: str, precision: int) -> list[tuple[float, float]]:
     """Decode an encoded polyline string to a list of (lat, lon) tuples."""
-    scale = 10 ** precision
+    scale = 10**precision
     coords: list[tuple[float, float]] = []
     index = lat = lng = 0
     while index < len(encoded):
@@ -45,7 +46,7 @@ def _decode_polyline(encoded: str, precision: int) -> list[tuple[float, float]]:
 
 def _encode_polyline(coords: list[tuple[float, float]], precision: int) -> str:
     """Encode a list of (lat, lon) tuples to a polyline string."""
-    scale = 10 ** precision
+    scale = 10**precision
     output: list[str] = []
     prev_lat = prev_lng = 0
     for lat, lng in coords:
@@ -207,8 +208,7 @@ class ValhallaProvider(RoutingProvider):
         legs = trip.get("legs") or []
         if not legs:
             raise ValueError(
-                f"Valhalla returned no route for "
-                f"({olat},{olon}) → ({dlat},{dlon}): {data}"
+                f"Valhalla returned no route for ({olat},{olon}) → ({dlat},{dlon}): {data}"
             )
 
         leg = legs[0]

@@ -1,4 +1,5 @@
 """API routes."""
+
 from .adjuster_positions import router as adjuster_positions_router
 from .adjusters import router as adjusters_router
 from .assignments import router as assignments_router

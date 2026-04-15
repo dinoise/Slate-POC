@@ -29,11 +29,7 @@ class AssignmentRepository(BaseRepository[Assignment]):
         Returns:
             List of assignments
         """
-        query = (
-            select(Assignment)
-            .where(Assignment.incident_id == incident_id)
-            .limit(limit)
-        )
+        query = select(Assignment).where(Assignment.incident_id == incident_id).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -52,11 +48,7 @@ class AssignmentRepository(BaseRepository[Assignment]):
         Returns:
             List of assignments
         """
-        query = (
-            select(Assignment)
-            .where(Assignment.adjuster_id == adjuster_id)
-            .limit(limit)
-        )
+        query = select(Assignment).where(Assignment.adjuster_id == adjuster_id).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

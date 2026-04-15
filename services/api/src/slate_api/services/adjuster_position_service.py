@@ -1,4 +1,5 @@
 """Service for AdjusterPosition business logic."""
+
 from ..repositories.adjuster_position_repository import AdjusterPositionRepository
 
 

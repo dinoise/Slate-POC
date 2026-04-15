@@ -1,4 +1,5 @@
 """Database models."""
+
 from .adjuster import Adjuster
 from .adjuster_position import AdjusterPosition
 from .assignment import Assignment

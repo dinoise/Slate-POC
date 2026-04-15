@@ -1,4 +1,5 @@
 """Base model for all database models."""
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, Integer
@@ -37,9 +38,5 @@ class BaseModel(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         """String representation of model."""
-        attrs = ", ".join(
-            f"{k}={v!r}"
-            for k, v in self.__dict__.items()
-            if not k.startswith("_")
-        )
+        attrs = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items() if not k.startswith("_"))
         return f"{self.__class__.__name__}({attrs})"

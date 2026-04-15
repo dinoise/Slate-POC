@@ -1,4 +1,5 @@
 """Repository for Adjuster model with availability queries."""
+
 from geoalchemy2.functions import ST_DWithin, ST_MakePoint, ST_SetSRID
 from geoalchemy2.types import Geography
 from sqlalchemy import cast, select
@@ -27,9 +28,7 @@ class AdjusterRepository(BaseRepository[Adjuster]):
         Returns:
             Adjuster or None
         """
-        result = await self.db.execute(
-            select(Adjuster).where(Adjuster.external_id == external_id)
-        )
+        result = await self.db.execute(select(Adjuster).where(Adjuster.external_id == external_id))
         return result.scalar_one_or_none()
 
     async def get_available(
@@ -84,13 +83,12 @@ class AdjusterRepository(BaseRepository[Adjuster]):
                 Geography,
             )
             from sqlalchemy import case
+
             current_location = case(
                 (pos.location.isnot(None), pos.location),
                 else_=Adjuster.home_location,
             )
-            query = query.where(
-                ST_DWithin(cast(current_location, Geography), point_geog, radius_m)
-            )
+            query = query.where(ST_DWithin(cast(current_location, Geography), point_geog, radius_m))
 
         query = query.limit(limit)
         result = await self.db.execute(query)

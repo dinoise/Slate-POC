@@ -1,4 +1,5 @@
 """OSRM routing provider implementation."""
+
 from __future__ import annotations
 
 import logging
@@ -140,10 +141,7 @@ class OSRMProvider(RoutingProvider):
 
     async def ping(self) -> bool:
         """Return True if the OSRM server is reachable and responding."""
-        url = (
-            f"{self._base_url}/route/v1/driving"
-            f"/-99.1332,19.4326;-99.15,19.42?overview=false"
-        )
+        url = f"{self._base_url}/route/v1/driving/-99.1332,19.4326;-99.15,19.42?overview=false"
         try:
             async with self._client(timeout=3.0) as client:
                 resp = await client.get(url)

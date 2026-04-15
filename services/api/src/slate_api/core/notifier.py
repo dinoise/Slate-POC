@@ -1,4 +1,5 @@
 """pg_notify listener and SSE broadcaster for assignment events."""
+
 from __future__ import annotations
 
 import asyncio
@@ -50,9 +51,7 @@ class NotificationBroadcaster:
             try:
                 queue.put_nowait(payload)
             except asyncio.QueueFull:
-                logger.warning(
-                    "Queue full for adjuster %d — dropping event", adjuster_id
-                )
+                logger.warning("Queue full for adjuster %d — dropping event", adjuster_id)
 
 
 # Module-level singletons
@@ -85,9 +84,7 @@ async def _listen_loop(dsn: str) -> None:
                     adjuster_id = int(data["adjuster_id"])
                     await broadcaster.broadcast(adjuster_id, data)
                 except Exception:
-                    logger.exception(
-                        "Error processing pg_notify payload: %s", payload
-                    )
+                    logger.exception("Error processing pg_notify payload: %s", payload)
 
             await _listener_conn.add_listener(CHANNEL, on_notification)
             logger.info("pg_notify LISTEN established on channel '%s'", CHANNEL)
@@ -99,9 +96,7 @@ async def _listen_loop(dsn: str) -> None:
         except asyncio.CancelledError:
             break
         except Exception:
-            logger.exception(
-                "pg_notify listener error; reconnecting in %ds", backoff
-            )
+            logger.exception("pg_notify listener error; reconnecting in %ds", backoff)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 60)
         finally:

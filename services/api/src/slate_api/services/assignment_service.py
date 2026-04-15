@@ -1,4 +1,5 @@
 """Business logic for Assignment operations."""
+
 import time
 from datetime import datetime
 
@@ -218,7 +219,9 @@ class AssignmentService:
             ],
         )
 
-    async def optimize_assignments(self, request: OptimizeRequest, provider: RoutingProvider) -> OptimizeResponse:
+    async def optimize_assignments(
+        self, request: OptimizeRequest, provider: RoutingProvider
+    ) -> OptimizeResponse:
         """
         Run OR-Tools LinearSumAssignment to optimally assign adjusters to incidents.
 
@@ -286,9 +289,7 @@ class AssignmentService:
         try:
             time_matrix = await provider.table(adj_coords, inc_coords)
         except Exception as exc:
-            logger.error(
-                "Routing provider '%s' failed: %s", provider.provider_name, exc
-            )
+            logger.error("Routing provider '%s' failed: %s", provider.provider_name, exc)
             raise ServiceUnavailableError(
                 f"Routing provider '{provider.provider_name}' is not reachable"
             ) from exc
@@ -320,15 +321,17 @@ class AssignmentService:
                     (i for i in range(len(adjusters)) if not np.isinf(col[i])),
                     key=lambda i: col[i],
                 )
-                for rank, adj_idx in enumerate(ranked[:request.top_k], start=1):
+                for rank, adj_idx in enumerate(ranked[: request.top_k], start=1):
                     t_s = float(col[adj_idx])
-                    all_candidates.append(CandidateResult(
-                        incident_id=incident.incident_id,
-                        adjuster_id=adjusters[adj_idx].adjuster_id,
-                        travel_time_s=t_s,
-                        travel_time_min=t_s / 60,
-                        rank=rank,
-                    ))
+                    all_candidates.append(
+                        CandidateResult(
+                            incident_id=incident.incident_id,
+                            adjuster_id=adjusters[adj_idx].adjuster_id,
+                            travel_time_s=t_s,
+                            travel_time_min=t_s / 60,
+                            rank=rank,
+                        )
+                    )
 
         # 5. Persist (optional)
         optimized: list[OptimizedAssignment] = []

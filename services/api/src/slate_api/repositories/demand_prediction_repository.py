@@ -1,4 +1,5 @@
 """Repository for DemandPrediction geo queries."""
+
 from geoalchemy2.functions import ST_MakeEnvelope, ST_Within
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

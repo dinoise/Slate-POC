@@ -1,4 +1,5 @@
 """Business logic for Adjuster operations."""
+
 from geoalchemy2.functions import ST_MakePoint
 from sqlalchemy.ext.asyncio import AsyncSession
 

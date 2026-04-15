@@ -1,4 +1,5 @@
 """Greedy positioning algorithm — uses demand_predictions DB table."""
+
 import math
 
 import h3
@@ -25,11 +26,16 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     R = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    )
     return R * 2 * math.asin(math.sqrt(a))
 
 
-def _neighbour_penalty(hex_id: str, reserved: set[str], hex_demand: dict[str, float], k_rings: int) -> float:
+def _neighbour_penalty(
+    hex_id: str, reserved: set[str], hex_demand: dict[str, float], k_rings: int
+) -> float:
     """Sum of pred_abs of reserved hexagons within k_rings H3 rings of hex_id.
 
     This implements the spatial penalty term from the p-median objective:
@@ -106,18 +112,20 @@ def _greedy(
             if current_hex:
                 reserved.discard(current_hex)
             reserved.add(best["h3_r8"])
-            results.append({
-                "adjuster_id": int(adj["adjuster_id"]),
-                "adjuster_name": adj["adjuster_name"],
-                "current_hex": current_hex,
-                "recommended_hex": best["h3_r8"],
-                "recommended_lat": float(best["lat"]),
-                "recommended_lon": float(best["lon"]),
-                "demand_gain": round(float(best_gain), 2),
-                "distance_km": round(best_dist, 2),
-                "eta_min": round(best_dist / SPEED_KMH * 60, 1),
-                "reason": f"demanda predicha {best['pred_abs']:.1f} siniestros, sin cobertura actual",
-            })
+            results.append(
+                {
+                    "adjuster_id": int(adj["adjuster_id"]),
+                    "adjuster_name": adj["adjuster_name"],
+                    "current_hex": current_hex,
+                    "recommended_hex": best["h3_r8"],
+                    "recommended_lat": float(best["lat"]),
+                    "recommended_lon": float(best["lon"]),
+                    "demand_gain": round(float(best_gain), 2),
+                    "distance_km": round(best_dist, 2),
+                    "eta_min": round(best_dist / SPEED_KMH * 60, 1),
+                    "reason": f"demanda predicha {best['pred_abs']:.1f} siniestros, sin cobertura actual",
+                }
+            )
 
     return results
 
@@ -133,13 +141,20 @@ class PositioningService:
         if not positions:
             raise ValueError(f"Scenario '{req.scenario}' has no positions")
 
-        adj_df = pd.DataFrame([{
-            "adjuster_id": p.adjuster_id,
-            "adjuster_name": p.adjuster.full_name if p.adjuster else f"Ajustador {p.adjuster_id}",
-            "lat": p.lat,
-            "lon": p.lon,
-            "h3_r8": p.h3_r8,
-        } for p in positions])
+        adj_df = pd.DataFrame(
+            [
+                {
+                    "adjuster_id": p.adjuster_id,
+                    "adjuster_name": p.adjuster.full_name
+                    if p.adjuster
+                    else f"Ajustador {p.adjuster_id}",
+                    "lat": p.lat,
+                    "lon": p.lon,
+                    "h3_r8": p.h3_r8,
+                }
+                for p in positions
+            ]
+        )
 
         demand_preds = await self._demand_repo.get_by_slot(
             hora_num=req.hora_num,
@@ -152,12 +167,17 @@ class PositioningService:
                 "Run scripts/generate_demand_predictions.py first."
             )
 
-        demand_df = pd.DataFrame([{
-            "h3_r8": p.h3_r8,
-            "pred_abs": p.pred_abs,
-            "lat": p.lat,
-            "lon": p.lon,
-        } for p in demand_preds])
+        demand_df = pd.DataFrame(
+            [
+                {
+                    "h3_r8": p.h3_r8,
+                    "pred_abs": p.pred_abs,
+                    "lat": p.lat,
+                    "lon": p.lon,
+                }
+                for p in demand_preds
+            ]
+        )
 
         raw = _greedy(
             adj_df,
@@ -214,19 +234,21 @@ class PositioningService:
                 cluster_id = orig.cluster_id
 
             wkt = f"POINT({lon} {lat})"
-            new_positions.append(AdjusterPosition(
-                adjuster_id=orig.adjuster_id,
-                lat=lat,
-                lon=lon,
-                location=ST_GeomFromText(wkt, 4326),
-                h3_r8=h3_r8,
-                scenario=scenario_name,
-                source=source,
-                demand_score=demand_score,
-                cluster_id=cluster_id,
-                hora_num=req.hora_num,
-                dia_semana_num=req.dia_semana_num,
-            ))
+            new_positions.append(
+                AdjusterPosition(
+                    adjuster_id=orig.adjuster_id,
+                    lat=lat,
+                    lon=lon,
+                    location=ST_GeomFromText(wkt, 4326),
+                    h3_r8=h3_r8,
+                    scenario=scenario_name,
+                    source=source,
+                    demand_score=demand_score,
+                    cluster_id=cluster_id,
+                    hora_num=req.hora_num,
+                    dia_semana_num=req.dia_semana_num,
+                )
+            )
 
         await self._pos_repo.bulk_insert(new_positions)
 

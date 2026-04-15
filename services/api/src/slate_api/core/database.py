@@ -1,4 +1,5 @@
 """Database connection and session management."""
+
 import logging
 from collections.abc import AsyncGenerator
 from typing import Annotated

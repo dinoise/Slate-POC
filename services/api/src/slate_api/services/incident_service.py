@@ -1,4 +1,5 @@
 """Business logic for Incident operations."""
+
 import asyncio
 
 from geoalchemy2.functions import ST_MakePoint
@@ -196,7 +197,9 @@ class IncidentService:
                 for assignment in assignments:
                     if assignment.status not in ("cancelled", "completed"):
                         await self.assignment_repository.update(assignment.id, status="cancelled")
-                        await self.adjuster_repository.update(assignment.adjuster_id, status="available")
+                        await self.adjuster_repository.update(
+                            assignment.adjuster_id, status="available"
+                        )
                 await self.repository.update(incident.id, status="cancelled")
                 cancelled += 1
         return cancelled
@@ -320,11 +323,11 @@ async def _auto_assign(
                     round(best.travel_time_min),
                 )
             else:
-                logger.warning(
-                    "Auto-assign: no reachable adjuster for incident %d", incident_id
-                )
+                logger.warning("Auto-assign: no reachable adjuster for incident %d", incident_id)
 
     except ServiceUnavailableError as exc:
-        logger.warning("Auto-assign: routing provider unavailable for incident %d: %s", incident_id, exc)
+        logger.warning(
+            "Auto-assign: routing provider unavailable for incident %d: %s", incident_id, exc
+        )
     except Exception:
         logger.exception("Auto-assign failed for incident %d", incident_id)

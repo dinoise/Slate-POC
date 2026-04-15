@@ -1,4 +1,5 @@
 """Pydantic schemas for Adjuster model."""
+
 from datetime import datetime
 from typing import Any
 
@@ -60,8 +61,8 @@ class AdjusterRead(AdjusterBase):
     current_latitude: float | None = Field(
         None,
         description="Current working position latitude from adjuster_positions. "
-                    "Populated by /available/ when a scenario is active. "
-                    "Falls back to home_latitude when None.",
+        "Populated by /available/ when a scenario is active. "
+        "Falls back to home_latitude when None.",
     )
     current_longitude: float | None = Field(
         None,

@@ -12,6 +12,7 @@ Usage:
     logger.info("Application started")
     logger.error("An error occurred", exc_info=True)
 """
+
 import logging
 import sys
 import warnings
@@ -31,10 +32,10 @@ class ColoredFormatter(logging.Formatter):
     """Colored log formatter for better readability in local development."""
 
     COLORS = {
-        "DEBUG": "\033[36m",     # Cyan
-        "INFO": "\033[32m",      # Green
-        "WARNING": "\033[33m",   # Yellow
-        "ERROR": "\033[31m",     # Red
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
         "CRITICAL": "\033[1;31m",  # Red + Bold
     }
     RESET = "\033[0m"

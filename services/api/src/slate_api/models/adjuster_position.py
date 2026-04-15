@@ -1,4 +1,5 @@
 """AdjusterPosition model — stores adjuster positions for demo scenarios."""
+
 from typing import TYPE_CHECKING, Any
 
 from geoalchemy2 import Geometry

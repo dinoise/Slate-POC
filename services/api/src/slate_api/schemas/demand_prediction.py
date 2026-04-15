@@ -1,4 +1,5 @@
 """Pydantic schemas for DemandPrediction model."""
+
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field

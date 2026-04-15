@@ -1,4 +1,5 @@
 """Incident model for insurance claims."""
+
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -17,9 +18,7 @@ class Incident(BaseModel):
     """Model representing an insurance incident/claim."""
 
     __tablename__ = "incidents"
-    __table_args__ = (
-        Index("idx_incidents_location", "location", postgresql_using="gist"),
-    )
+    __table_args__ = (Index("idx_incidents_location", "location", postgresql_using="gist"),)
 
     # Basic info
     external_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)

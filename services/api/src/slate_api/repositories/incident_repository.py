@@ -1,4 +1,5 @@
 """Repository for Incident model with geospatial queries."""
+
 from geoalchemy2.functions import ST_DWithin, ST_MakePoint, ST_SetSRID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,9 +25,7 @@ class IncidentRepository(BaseRepository[Incident]):
         Returns:
             Incident or None
         """
-        result = await self.db.execute(
-            select(Incident).where(Incident.external_id == external_id)
-        )
+        result = await self.db.execute(select(Incident).where(Incident.external_id == external_id))
         return result.scalar_one_or_none()
 
     async def get_nearby(
@@ -55,11 +54,7 @@ class IncidentRepository(BaseRepository[Incident]):
         point = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)
 
         # Query incidents within radius
-        query = (
-            select(Incident)
-            .where(ST_DWithin(Incident.location, point, radius_m))
-            .limit(limit)
-        )
+        query = select(Incident).where(ST_DWithin(Incident.location, point, radius_m)).limit(limit)
 
         result = await self.db.execute(query)
         return list(result.scalars().all())

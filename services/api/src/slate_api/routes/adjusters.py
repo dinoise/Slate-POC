@@ -1,4 +1,5 @@
 """Adjuster routes."""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
@@ -118,7 +119,9 @@ async def get_available_adjusters(
     longitude: float | None = Query(None, ge=-180, le=180),
     radius_km: float = Query(50.0, gt=0, le=200),
     limit: int = Query(100, ge=1, le=1000),
-    scenario: str = Query("initial", description="Positioning scenario to use for current location."),
+    scenario: str = Query(
+        "initial", description="Positioning scenario to use for current location."
+    ),
 ) -> list[AdjusterRead]:
     """Get available adjusters with their current working position.
 

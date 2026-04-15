@@ -1,4 +1,5 @@
 """FastAPI main application."""
+
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -41,9 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting application...")
     await init_db()
     app.state.routing_provider = init_provider(settings)
-    logger.info(
-        "Routing provider initialised: %s", app.state.routing_provider.provider_name
-    )
+    logger.info("Routing provider initialised: %s", app.state.routing_provider.provider_name)
     await start_listener(app)
 
     yield

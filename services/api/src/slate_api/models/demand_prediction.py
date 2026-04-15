@@ -1,4 +1,5 @@
 """DemandPrediction model — cached ML model output per H3 hexagon and time slot."""
+
 from datetime import datetime
 from typing import Any
 
@@ -54,12 +55,8 @@ class DemandPrediction(Base):
     )
 
     # Provenance
-    model_version: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="v1.0.0"
-    )
-    predicted_for: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    model_version: Mapped[str] = mapped_column(String(20), nullable=False, default="v1.0.0")
+    predicted_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

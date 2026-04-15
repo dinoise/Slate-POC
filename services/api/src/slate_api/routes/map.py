@@ -1,4 +1,5 @@
 """Map and simulation interface routes."""
+
 from pathlib import Path
 
 from fastapi import APIRouter, Request

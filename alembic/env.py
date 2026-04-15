@@ -1,13 +1,15 @@
 """Alembic environment configuration for async migrations."""
+
 import asyncio
 import os
 from logging.config import fileConfig
 
-from alembic import context
 from geoalchemy2 import alembic_helpers
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+from alembic import context
 
 # Solo importamos Base (modelos) — no instanciamos Settings completo.
 # DATABASE_URL se lee directamente de la variable de entorno para que
@@ -73,7 +75,13 @@ _OUR_TABLES = {t.name for t in target_metadata.sorted_tables}
 _POSTGIS_SCHEMAS = {"tiger", "tiger_data", "topology"}
 
 # Known PostGIS tables in public schema to exclude
-_POSTGIS_TABLES = {"spatial_ref_sys", "geography_columns", "geometry_columns", "raster_columns", "raster_overviews"}
+_POSTGIS_TABLES = {
+    "spatial_ref_sys",
+    "geography_columns",
+    "geometry_columns",
+    "raster_columns",
+    "raster_overviews",
+}
 
 
 def include_object(object, name, type_, reflected, compare_to):
@@ -83,7 +91,7 @@ def include_object(object, name, type_, reflected, compare_to):
     but not in our models - these are PostGIS system tables that should be ignored.
     """
     # Exclude objects from PostGIS schemas
-    schema = getattr(object, 'schema', None)
+    schema = getattr(object, "schema", None)
     if schema in _POSTGIS_SCHEMAS:
         return False
 
@@ -96,9 +104,9 @@ def include_object(object, name, type_, reflected, compare_to):
             return False
 
     if type_ == "index":
-        table = getattr(object, 'table', None)
+        table = getattr(object, "table", None)
         if table is not None:
-            table_schema = getattr(table, 'schema', None)
+            table_schema = getattr(table, "schema", None)
             if table_schema in _POSTGIS_SCHEMAS:
                 return False
             if table.name in _POSTGIS_TABLES:

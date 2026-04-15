@@ -1,4 +1,5 @@
 """Business logic for DemandPrediction queries."""
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.exceptions import ValidationError

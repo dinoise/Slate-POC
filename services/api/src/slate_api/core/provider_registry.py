@@ -16,6 +16,7 @@ Inject via FastAPI ``Depends``::
 The registry is initialised in ``main.py`` lifespan using the value of
 ``settings.TRAFFIC_PROVIDER`` as the default.
 """
+
 import asyncio
 from typing import Annotated
 
