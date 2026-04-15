@@ -46,6 +46,7 @@ jobs:
   push-job-image:
     name: "Actualizar imagen del Cloud Run Job"
     needs: [build]
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Configurar credenciales GCP
