@@ -6,6 +6,17 @@ members = [
     "services/jobs",
 ]
 
+# Herramientas de desarrollo compartidas por todos los servicios
+# uv las instala con: uv sync --all-packages (incluye dev groups por defecto)
+[dependency-groups]
+dev = [
+    "ruff>=0.2.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-env>=1.1.0",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

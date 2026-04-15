@@ -18,6 +18,15 @@ members = [
     "slate-notifications",
 ]
 
+[manifest.dependency-groups]
+dev = [
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23.0" },
+    { name = "pytest-cov", specifier = ">=4.1.0" },
+    { name = "pytest-env", specifier = ">=1.1.0" },
+    { name = "ruff", specifier = ">=0.2.0" },
+]
+
 [[package]]
 name = "absl-py"
 version = "2.4.0"
