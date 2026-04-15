@@ -43,18 +43,11 @@ on:
         required: false
         type: boolean
         default: true
-      run-migrations:
-        description: "Ejecutar alembic upgrade head antes del deploy"
-        required: false
-        type: boolean
-        default: false
     secrets:
       project-id:
         required: true
       workload-identity-provider:
         required: true
-      database-url:
-        required: false
     outputs:
       service-url:
         value: ${{ jobs.deploy.outputs.service-url }}
@@ -79,14 +72,6 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.project-id }}
-
-      - name: Ejecutar migraciones Alembic
-        if: inputs.run-migrations && secrets.database-url != ''
-        run: |
-          echo "🗄️ Ejecutando migraciones..."
-          uv run alembic upgrade head
-        env:
-          DATABASE_URL: ${{ secrets.database-url }}
 
       - name: Deploy a Cloud Run
         id: deploy
