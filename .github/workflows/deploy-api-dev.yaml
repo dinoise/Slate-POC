@@ -2,14 +2,11 @@ name: "Deploy — API Service (dev)"
 
 on:
   push:
-    branches: [develop]
+    branches: [dev]
     paths:
       - "services/api/**"
       - "services/core/**"        # core es dependencia de api
-      - "alembic/**"
       - ".github/workflows/deploy-api-dev.yaml"
-      - ".github/workflows/shared-build-and-push-backend.yaml"
-      - ".github/workflows/shared-deploy-cloudrun.yaml"
   workflow_dispatch:
     inputs:
       skip-tests:
@@ -58,8 +55,6 @@ jobs:
       min-instances: 0
       max-instances: 5
       timeout: 300s
-      run-migrations: true
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      database-url: ${{ secrets.DATABASE_URL_DEV }}

@@ -2,7 +2,7 @@ name: "Deploy — Reporter App (dev)"
 
 on:
   push:
-    branches: [develop]
+    branches: [dev]
     paths:
       - "apps/reporter/**"
       - "packages/**"

@@ -1,7 +1,7 @@
 [project]
 name = "slate-notifications"
 version = "0.1.0"
-description = "Notification service for Despacho — pg_notify listener and SSE broadcaster"
+description = "Notification service for Slate — pg_notify listener and SSE broadcaster"
 requires-python = ">=3.11"
 dependencies = [
     # Internal workspace packages

@@ -2,7 +2,7 @@ name: "Deploy — Jobs Service (dev)"
 
 on:
   push:
-    branches: [develop]
+    branches: [dev]
     paths:
       - "services/jobs/**"
       - "services/core/**"

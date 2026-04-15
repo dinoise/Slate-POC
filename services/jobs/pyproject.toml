@@ -1,7 +1,7 @@
 [project]
 name = "slate-jobs"
 version = "0.1.0"
-description = "Background jobs for Despacho — demand prediction, scheduled optimization"
+description = "Background jobs for Slate — demand prediction, scheduled optimization"
 requires-python = ">=3.11"
 dependencies = [
     # Internal workspace packages
