@@ -117,6 +117,7 @@ app.include_router(settings_router, prefix=settings.API_V1_PREFIX)
 app.include_router(users_router, prefix=settings.API_V1_PREFIX)
 app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
 
+
 if __name__ == "__main__":
     import uvicorn
 

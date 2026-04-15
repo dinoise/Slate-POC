@@ -55,7 +55,7 @@ jobs:
           TIMESTAMP=$(date +%s)
           IMAGE_TAG="${{ inputs.tag }}-${SHORT_SHA}-${TIMESTAMP}"
           SERVICE_NAME=$(basename ${{ inputs.service-path }})
-          IMAGE_FULL="${{ inputs.registry }}/${{ secrets.project-id }}/slate/${SERVICE_NAME}:${IMAGE_TAG}"
+          IMAGE_FULL="${{ inputs.registry }}/${{ secrets.project-id }}/poc-images/${SERVICE_NAME}:${IMAGE_TAG}"
           echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "image-full=${IMAGE_FULL}" >> $GITHUB_OUTPUT
           echo "service-name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
