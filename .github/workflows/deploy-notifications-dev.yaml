@@ -45,46 +45,16 @@ jobs:
     name: "Deploy"
     needs: [build]
     if: needs.build.result == 'success'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configurar credenciales GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: poc-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
-
-      - name: Setup Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-
-      - name: Deploy a Cloud Run
-        id: deploy
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: slate-notifications-dev
-          image: ${{ needs.build.outputs.registry }}/${{ secrets.GCP_PROJECT_ID }}/poc-images/${{ needs.build.outputs.service-name }}:${{ needs.build.outputs.image-tag }}
-          region: us-central1
-          flags: >-
-            --memory=512Mi
-            --cpu=0.5
-            --min-instances=1
-            --max-instances=1
-            --timeout=3600s
-            --set-env-vars=ENVIRONMENT=dev
-            --allow-unauthenticated
-
-      - name: Resumen
-        if: always()
-        run: |
-          STATUS="${{ job.status }}"
-          EMOJI="✅"; [ "$STATUS" != "success" ] && EMOJI="❌"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "${EMOJI} Deploy slate-notifications-dev — ${STATUS}"
-          echo "🔗 URL: ${{ steps.deploy.outputs.url }}"
-          echo "🐳 Image: ${{ needs.build.outputs.registry }}/${{ secrets.GCP_PROJECT_ID }}/poc-images/${{ needs.build.outputs.service-name }}:${{ needs.build.outputs.image-tag }}"
-          echo "🔖 Commit: ${{ github.sha }}"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    uses: ./.github/workflows/shared-deploy-cloudrun.yaml
+    with:
+      service-name: slate-notifications-dev
+      image-full: ${{ needs.build.outputs.registry }}/${{ secrets.GCP_PROJECT_ID }}/poc-images/${{ needs.build.outputs.service-name }}:${{ needs.build.outputs.image-tag }}
+      environment: dev
+      memory: 512Mi
+      cpu: "0.5"
+      min-instances: 1
+      max-instances: 1
+      timeout: 3600s
+    secrets:
+      project-id: ${{ secrets.GCP_PROJECT_ID }}
+      workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}

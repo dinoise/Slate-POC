@@ -43,6 +43,17 @@ on:
         required: false
         type: boolean
         default: true
+      cloudrun-secrets:
+        description: |
+          Secrets de GCP Secret Manager a montar como env vars en el contenedor.
+          Formato multilínea (un par por línea): ENV_VAR=gcp-secret-name:version
+          Convención de nombres: poc-{recurso}-{env}-{proposito}
+          Ejemplo:
+            DATABASE_URL=poc-database-dev-url:latest
+            SECRET_KEY=poc-api-dev-secret-key:latest
+        required: false
+        type: string
+        default: ""
     secrets:
       project-id:
         required: true
@@ -80,6 +91,7 @@ jobs:
           service: ${{ inputs.service-name }}
           image: ${{ inputs.image-full }}
           region: ${{ inputs.region }}
+          secrets: ${{ inputs.cloudrun-secrets }}
           flags: >-
             --memory=${{ inputs.memory }}
             --cpu=${{ inputs.cpu }}
