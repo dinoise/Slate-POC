@@ -62,12 +62,13 @@ jobs:
 
       - name: Actualizar imagen del Cloud Run Job
         run: |
+          IMAGE="${{ needs.build.outputs.registry }}/${{ secrets.GCP_PROJECT_ID }}/poc-images/${{ needs.build.outputs.service-name }}:${{ needs.build.outputs.image-tag }}"
           gcloud run jobs update slate-jobs-dev \
-            --image=${{ needs.build.outputs.image-full }} \
+            --image="${IMAGE}" \
             --region=us-central1 \
             --project=${{ secrets.GCP_PROJECT_ID }} || \
           gcloud run jobs create slate-jobs-dev \
-            --image=${{ needs.build.outputs.image-full }} \
+            --image="${IMAGE}" \
             --region=us-central1 \
             --memory=4Gi \
             --cpu=2 \
@@ -77,5 +78,5 @@ jobs:
 
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅ Cloud Run Job actualizado"
-          echo "🐳 Image: ${{ needs.build.outputs.image-full }}"
+          echo "🐳 Image: ${IMAGE}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

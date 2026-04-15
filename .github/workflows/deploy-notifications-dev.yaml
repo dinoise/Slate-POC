@@ -66,7 +66,7 @@ jobs:
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: slate-notifications-dev
-          image: ${{ needs.build.outputs.image-full }}
+          image: ${{ needs.build.outputs.registry }}/${{ secrets.GCP_PROJECT_ID }}/poc-images/${{ needs.build.outputs.service-name }}:${{ needs.build.outputs.image-tag }}
           region: us-central1
           flags: >-
             --memory=512Mi
@@ -85,6 +85,6 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "${EMOJI} Deploy slate-notifications-dev — ${STATUS}"
           echo "🔗 URL: ${{ steps.deploy.outputs.url }}"
-          echo "🐳 Image: ${{ needs.build.outputs.image-full }}"
+          echo "🐳 Image: ${{ needs.build.outputs.registry }}/${{ secrets.GCP_PROJECT_ID }}/poc-images/${{ needs.build.outputs.service-name }}:${{ needs.build.outputs.image-tag }}"
           echo "🔖 Commit: ${{ github.sha }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
