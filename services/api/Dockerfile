@@ -49,7 +49,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 RUN useradd --no-create-home --shell /bin/false appuser
 USER appuser
 
-EXPOSE 8000
+EXPOSE 8080
 
 # Build args para metadata
 ARG BUILD_DATE
@@ -61,7 +61,4 @@ ARG LOG_LEVEL=INFO
 ENV ENVIRONMENT=${ENVIRONMENT} \
     LOG_LEVEL=${LOG_LEVEL}
 
-CMD ["python", "-m", "uvicorn", "slate_api.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "1"]
+CMD ["sh", "-c", "python -m uvicorn slate_api.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1"]
