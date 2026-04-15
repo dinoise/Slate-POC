@@ -7,8 +7,6 @@ on:
       - "services/notifications/**"
       - "services/core/**"
       - ".github/workflows/deploy-notifications-dev.yaml"
-      - ".github/workflows/shared-build-and-push-backend.yaml"
-      - ".github/workflows/shared-deploy-cloudrun.yaml"
   workflow_dispatch:
     inputs:
       skip-tests:

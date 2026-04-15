@@ -7,7 +7,6 @@ on:
       - "services/jobs/**"
       - "services/core/**"
       - ".github/workflows/deploy-jobs-dev.yaml"
-      - ".github/workflows/shared-build-and-push-backend.yaml"
   workflow_dispatch:
     inputs:
       skip-tests:

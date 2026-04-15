@@ -7,7 +7,6 @@ on:
       - "apps/reporter/**"
       - "packages/**"
       - ".github/workflows/deploy-reporter-dev.yaml"
-      - ".github/workflows/shared-build-and-push-frontend.yaml"
   workflow_dispatch:
 
 permissions:
