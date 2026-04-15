@@ -56,6 +56,21 @@ on:
         required: false
         type: string
         default: ""
+      vpc-network:
+        description: "Nombre de la VPC para Direct VPC Egress (e.g. default). Omitir si no se necesita VPC."
+        required: false
+        type: string
+        default: ""
+      vpc-subnet:
+        description: "Nombre del subnet para Direct VPC Egress (e.g. poc-cloudrun-subnet)."
+        required: false
+        type: string
+        default: ""
+      vpc-egress:
+        description: "Modo de egress VPC: all-traffic | private-ranges-only"
+        required: false
+        type: string
+        default: "private-ranges-only"
       cloudrun-secrets:
         description: |
           Secrets de GCP Secret Manager a montar como env vars en el contenedor.
@@ -114,6 +129,7 @@ jobs:
             --set-env-vars=ENVIRONMENT=${{ inputs.environment }}
             ${{ inputs.allow-unauthenticated && '--allow-unauthenticated' || '--no-allow-unauthenticated' }}
             ${{ inputs.runtime-service-account != '' && format('--service-account={0}', inputs.runtime-service-account) || '' }}
+            ${{ inputs.vpc-network != '' && format('--network={0} --subnet={1} --vpc-egress={2}', inputs.vpc-network, inputs.vpc-subnet, inputs.vpc-egress) || '' }}
 
       - name: Health check
         run: |
