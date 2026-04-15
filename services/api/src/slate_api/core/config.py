@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
 
-    # Redis
-    REDIS_URL: RedisDsn
+    # Redis (declarado para compatibilidad futura; no usado actualmente por la API)
+    REDIS_URL: RedisDsn = "redis://localhost:6379/0"  # type: ignore[assignment]
 
     # API
     API_V1_PREFIX: str = "/api/v1"
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Security
-    SECRET_KEY: str
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
