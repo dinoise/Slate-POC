@@ -51,6 +51,11 @@ on:
         required: false
         type: boolean
         default: true
+      runtime-service-account:
+        description: "Service account que ejecuta el contenedor (runtime). Si se omite, usa la SA por defecto del proyecto."
+        required: false
+        type: string
+        default: ""
       cloudrun-secrets:
         description: |
           Secrets de GCP Secret Manager a montar como env vars en el contenedor.
@@ -108,6 +113,7 @@ jobs:
             --timeout=${{ inputs.timeout }}
             --set-env-vars=ENVIRONMENT=${{ inputs.environment }}
             ${{ inputs.allow-unauthenticated && '--allow-unauthenticated' || '--no-allow-unauthenticated' }}
+            ${{ inputs.runtime-service-account != '' && format('--service-account={0}', inputs.runtime-service-account) || '' }}
 
       - name: Health check
         run: |

@@ -57,6 +57,7 @@ jobs:
       min-instances: 0
       max-instances: 5
       timeout: 300s
+      runtime-service-account: poc-api@lennken-poc.iam.gserviceaccount.com
       cloudrun-secrets: |
         DATABASE_URL=poc-database-dev-url:latest
     secrets:
