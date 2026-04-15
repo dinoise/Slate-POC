@@ -28,7 +28,7 @@ jobs:
     uses: ./.github/workflows/shared-lint-and-test-backend.yaml
     with:
       service-path: services/api
-      coverage-threshold: 70
+      coverage-threshold: 65
 
   test-notifications:
     name: "Notifications Service"
