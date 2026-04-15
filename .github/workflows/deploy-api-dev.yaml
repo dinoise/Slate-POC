@@ -48,7 +48,9 @@ jobs:
     uses: ./.github/workflows/shared-deploy-cloudrun.yaml
     with:
       service-name: slate-api-dev
-      image-full: ${{ needs.build.outputs.registry }}/${{ secrets.GCP_PROJECT_ID }}/poc-images/${{ needs.build.outputs.service-name }}:${{ needs.build.outputs.image-tag }}
+      image-registry: ${{ needs.build.outputs.registry }}
+      image-service-name: ${{ needs.build.outputs.service-name }}
+      image-tag: ${{ needs.build.outputs.image-tag }}
       environment: dev
       memory: 512Mi
       cpu: "1"

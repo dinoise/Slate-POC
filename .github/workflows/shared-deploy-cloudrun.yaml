@@ -3,8 +3,16 @@ name: "[Shared] Deploy — Cloud Run"
 on:
   workflow_call:
     inputs:
-      image-full:
-        description: "Imagen completa con tag, e.g. us-central1-docker.pkg.dev/proj/slate/api:dev-abc1234-1234567890"
+      image-registry:
+        description: "Registry base, e.g. us-central1-docker.pkg.dev"
+        required: true
+        type: string
+      image-service-name:
+        description: "Nombre del servicio en Artifact Registry (basename del service-path)"
+        required: true
+        type: string
+      image-tag:
+        description: "Tag de la imagen, e.g. dev-abc1234-1234567890"
         required: true
         type: string
       service-name:
@@ -89,7 +97,7 @@ jobs:
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ inputs.service-name }}
-          image: ${{ inputs.image-full }}
+          image: ${{ inputs.image-registry }}/${{ secrets.project-id }}/poc-images/${{ inputs.image-service-name }}:${{ inputs.image-tag }}
           region: ${{ inputs.region }}
           secrets: ${{ inputs.cloudrun-secrets }}
           flags: >-
@@ -128,7 +136,7 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "${EMOJI} Deploy ${{ inputs.service-name }} — ${STATUS}"
           echo "🔗 URL: ${{ steps.deploy.outputs.url }}"
-          echo "🐳 Image: ${{ inputs.image-full }}"
+          echo "🐳 Image: ${{ inputs.image-registry }}/${{ secrets.project-id }}/poc-images/${{ inputs.image-service-name }}:${{ inputs.image-tag }}"
           echo "🌿 Branch: ${{ github.ref_name }}"
           echo "👤 Actor: ${{ github.actor }}"
           echo "🔖 Commit: ${{ github.sha }}"
