@@ -168,7 +168,8 @@ jobs:
           #           roles/run.invoker en el servicio Cloud Run para poc-deployer
           ID_TOKEN=$(gcloud auth print-identity-token \
             --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
-            --audiences="${SERVICE_URL}")
+            --audiences="${SERVICE_URL}" \
+            --include-email)
 
           # Debug: ver body completo del primer intento
           echo "── Respuesta completa (primer intento) ──"
