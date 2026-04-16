@@ -2,16 +2,13 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from .core import close_db, get_logger, init_db, settings, setup_logging
 from .core.exceptions import AppException
-from .core.notifier import start_listener, stop_listener
 from .core.provider_registry import init_provider
 from .routes import (
     adjuster_positions_router,
@@ -19,8 +16,6 @@ from .routes import (
     assignments_router,
     demand_predictions_router,
     incidents_router,
-    map_router,
-    notifications_router,
     recommendations_router,
     settings_router,
     users_router,
@@ -43,13 +38,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
     app.state.routing_provider = init_provider(settings)
     logger.info("Routing provider initialised: %s", app.state.routing_provider.provider_name)
-    await start_listener(app)
 
     yield
 
     # Shutdown
     logger.info("Shutting down application...")
-    await stop_listener(app)
     await close_db()
     logger.info("Application shut down successfully")
 
@@ -101,12 +94,7 @@ async def health_check() -> dict[str, str]:
     return {"status": "healthy", "version": settings.VERSION}
 
 
-# Static files
-_here = Path(__file__).parent
-app.mount("/static", StaticFiles(directory=_here / "static"), name="static")
-
 # Register routers
-app.include_router(map_router)
 app.include_router(incidents_router, prefix=settings.API_V1_PREFIX)
 app.include_router(adjusters_router, prefix=settings.API_V1_PREFIX)
 app.include_router(assignments_router, prefix=settings.API_V1_PREFIX)
@@ -115,7 +103,6 @@ app.include_router(adjuster_positions_router, prefix=settings.API_V1_PREFIX)
 app.include_router(recommendations_router, prefix=settings.API_V1_PREFIX)
 app.include_router(settings_router, prefix=settings.API_V1_PREFIX)
 app.include_router(users_router, prefix=settings.API_V1_PREFIX)
-app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,4 +1,4 @@
-"""pg_notify listener and SSE broadcaster for assignment events."""
+"""pg_notify listener and SSE broadcaster — notifications service."""
 
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ CHANNEL = "assignment_events"
 
 class NotificationBroadcaster:
     """
-    Manages per-adjuster SSE subscriber queues.
+    Per-adjuster SSE subscriber queues.
 
-    subscribe(adjuster_id) → Queue   — called when SSE connection opens
-    unsubscribe(adjuster_id, queue)  — called in SSE generator finally block
-    broadcast(adjuster_id, payload)  — called by pg_notify listener callback
+    subscribe(adjuster_id)          → Queue  — SSE connection opens
+    unsubscribe(adjuster_id, queue)          — SSE generator finally block
+    broadcast(adjuster_id, payload)          — pg_notify callback
     """
 
     def __init__(self) -> None:
@@ -31,11 +31,7 @@ class NotificationBroadcaster:
     def subscribe(self, adjuster_id: int) -> asyncio.Queue[dict]:
         queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=50)
         self._subscribers.setdefault(adjuster_id, set()).add(queue)
-        logger.debug(
-            "SSE subscriber added for adjuster %d (total: %d)",
-            adjuster_id,
-            len(self._subscribers[adjuster_id]),
-        )
+        logger.debug("SSE subscriber added for adjuster %d", adjuster_id)
         return queue
 
     def unsubscribe(self, adjuster_id: int, queue: asyncio.Queue[dict]) -> None:
@@ -54,24 +50,19 @@ class NotificationBroadcaster:
                 logger.warning("Queue full for adjuster %d — dropping event", adjuster_id)
 
 
-# Module-level singletons
 broadcaster = NotificationBroadcaster()
 _listener_conn: asyncpg.Connection | None = None
 _listener_task: asyncio.Task | None = None
 
 
 async def _listen_loop(dsn: str) -> None:
-    """
-    Persistent asyncpg LISTEN loop with automatic reconnect on failure.
-    Parses each pg_notify payload and fans it out to SSE subscribers.
-    """
     global _listener_conn
     backoff = 1
 
     while True:
         try:
             _listener_conn = await asyncpg.connect(dsn)
-            backoff = 1  # reset after successful connect
+            backoff = 1
 
             async def on_notification(
                 conn: asyncpg.Connection,
@@ -89,7 +80,6 @@ async def _listen_loop(dsn: str) -> None:
             await _listener_conn.add_listener(CHANNEL, on_notification)
             logger.info("pg_notify LISTEN established on channel '%s'", CHANNEL)
 
-            # Keep-alive loop — asyncpg calls on_notification on each pg_notify
             while not _listener_conn.is_closed():
                 await asyncio.sleep(30)
 
@@ -106,16 +96,13 @@ async def _listen_loop(dsn: str) -> None:
 
 
 async def start_listener(app: FastAPI) -> None:
-    """Start the pg_notify listener background task. Called in lifespan startup."""
     global _listener_task
-    # asyncpg needs postgresql:// not postgresql+asyncpg://
     dsn = str(settings.DATABASE_URL).replace("postgresql+asyncpg://", "postgresql://")
     _listener_task = asyncio.create_task(_listen_loop(dsn), name="pg_notify_listener")
     logger.info("pg_notify listener task started")
 
 
 async def stop_listener(app: FastAPI) -> None:
-    """Cancel the listener task and close its connection. Called in lifespan shutdown."""
     global _listener_task, _listener_conn
     if _listener_task:
         _listener_task.cancel()
