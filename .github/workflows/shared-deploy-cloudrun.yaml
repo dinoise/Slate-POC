@@ -71,6 +71,16 @@ on:
         required: false
         type: string
         default: "private-ranges-only"
+      enable-iap:
+        description: "Configurar el IAM binding para el service agent de IAP (roles/run.invoker). Requiere que IAP esté activado previamente en el servicio desde GCP Console."
+        required: false
+        type: boolean
+        default: false
+      health-check-path:
+        description: "Path del health check, e.g. /health o /healthz"
+        required: false
+        type: string
+        default: "/health"
       cloudrun-secrets:
         description: |
           Secrets de GCP Secret Manager a montar como env vars en el contenedor.
@@ -131,14 +141,28 @@ jobs:
             ${{ inputs.runtime-service-account != '' && format('--service-account={0}', inputs.runtime-service-account) || '' }}
             ${{ inputs.vpc-network != '' && format('--network={0} --subnet={1} --vpc-egress={2}', inputs.vpc-network, inputs.vpc-subnet, inputs.vpc-egress) || '' }}
 
+      - name: Configurar IAM binding para IAP
+        if: inputs.enable-iap
+        run: |
+          PROJECT_NUMBER=$(gcloud projects describe ${{ secrets.project-id }} \
+            --format="value(projectNumber)")
+          IAP_SA="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-iap.iam.gserviceaccount.com"
+          echo "🔐 Asignando roles/run.invoker a ${IAP_SA}"
+          gcloud run services add-iam-policy-binding ${{ inputs.service-name }} \
+            --member="${IAP_SA}" \
+            --role="roles/run.invoker" \
+            --region=${{ inputs.region }} \
+            --project=${{ secrets.project-id }}
+          echo "✅ IAP service agent configurado"
+
       - name: Health check
         run: |
           SERVICE_URL="${{ steps.deploy.outputs.url }}"
-          echo "🔍 Health check → ${SERVICE_URL}/health"
+          echo "🔍 Health check → ${SERVICE_URL}${{ inputs.health-check-path }}"
           MAX_ATTEMPTS=5
           ATTEMPT=1
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            if curl -sf "${SERVICE_URL}/health" > /dev/null 2>&1; then
+            if curl -sf "${SERVICE_URL}${{ inputs.health-check-path }}" > /dev/null 2>&1; then
               echo "✅ Health check OK (intento ${ATTEMPT})"
               exit 0
             fi

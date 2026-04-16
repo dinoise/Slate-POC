@@ -21,17 +21,39 @@ jobs:
       app-path: apps/reporter
       coverage-threshold: 70
 
-  build-and-deploy:
-    name: "Build & Deploy"
+  build:
+    name: "Build"
     needs: [test]
     uses: ./.github/workflows/shared-build-and-push-frontend.yaml
     with:
       app-path: apps/reporter
-      bucket: slate-app-dev
-      bucket-prefix: reporter
+      registry: us-central1-docker.pkg.dev
+      tag: dev
       environment: dev
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       vite-api-base-url: ${{ secrets.VITE_API_BASE_URL_DEV }}
-      vite-notifications-url: ""   # reporter no usa SSE
+
+  deploy:
+    name: "Deploy"
+    needs: [build]
+    if: needs.build.result == 'success'
+    uses: ./.github/workflows/shared-deploy-cloudrun.yaml
+    with:
+      service-name: slate-reporter-dev
+      image-registry: ${{ needs.build.outputs.registry }}
+      image-service-name: ${{ needs.build.outputs.service-name }}
+      image-tag: ${{ needs.build.outputs.image-tag }}
+      environment: dev
+      memory: 256Mi
+      cpu: "0.5"
+      min-instances: 0
+      max-instances: 2
+      timeout: 60s
+      allow-unauthenticated: false
+      enable-iap: true
+      health-check-path: /healthz
+    secrets:
+      project-id: ${{ secrets.GCP_PROJECT_ID }}
+      workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
