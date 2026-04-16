@@ -159,10 +159,17 @@ jobs:
         run: |
           SERVICE_URL="${{ steps.deploy.outputs.url }}"
           echo "🔍 Health check → ${SERVICE_URL}${{ inputs.health-check-path }}"
+
+          # Obtener identity token con la URL del servicio como audience.
+          # El runner ya tiene credenciales GCP via Workload Identity (paso anterior).
+          ID_TOKEN=$(gcloud auth print-identity-token --audiences="${SERVICE_URL}" 2>/dev/null)
+
           MAX_ATTEMPTS=5
           ATTEMPT=1
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            if curl -sf "${SERVICE_URL}${{ inputs.health-check-path }}" > /dev/null 2>&1; then
+            if curl -sf \
+              -H "Authorization: Bearer ${ID_TOKEN}" \
+              "${SERVICE_URL}${{ inputs.health-check-path }}" > /dev/null 2>&1; then
               echo "✅ Health check OK (intento ${ATTEMPT})"
               exit 0
             fi
