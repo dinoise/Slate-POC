@@ -20,6 +20,10 @@ node_modules/
 .pnpm-store/
 apps/*/dist/
 apps/*/coverage/
+apps/*/.playwright/
+apps/*/test-results/
+apps/*/playwright-report/
+apps/*/blob-report/
 packages/*/dist/
 
 # ── Variables de entorno ──────────────────────────────────────────────────────
