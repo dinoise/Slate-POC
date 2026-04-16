@@ -162,7 +162,7 @@ jobs:
 
           # Obtener identity token con la URL del servicio como audience.
           # El runner ya tiene credenciales GCP via Workload Identity (paso anterior).
-          ID_TOKEN=$(gcloud auth print-identity-token --audiences="${SERVICE_URL}" 2>/dev/null)
+          ID_TOKEN=$(gcloud auth print-identity-token --audiences="${SERVICE_URL}")
 
           MAX_ATTEMPTS=5
           ATTEMPT=1
