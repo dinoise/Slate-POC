@@ -170,6 +170,14 @@ jobs:
             --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
             --audiences="${SERVICE_URL}")
 
+          # Debug: ver body completo del primer intento
+          echo "── Respuesta completa (primer intento) ──"
+          curl -si \
+            -H "Authorization: Bearer ${ID_TOKEN}" \
+            "${SERVICE_URL}${{ inputs.health-check-path }}" || true
+          echo ""
+          echo "─────────────────────────────────────────"
+
           MAX_ATTEMPTS=5
           ATTEMPT=1
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
