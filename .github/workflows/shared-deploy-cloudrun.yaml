@@ -161,8 +161,11 @@ jobs:
           echo "🔍 Health check → ${SERVICE_URL}${{ inputs.health-check-path }}"
 
           # Obtener identity token con la URL del servicio como audience.
-          # El runner ya tiene credenciales GCP via Workload Identity (paso anterior).
-          ID_TOKEN=$(gcloud auth print-identity-token --audiences="${SERVICE_URL}")
+          # Workload Identity Federation no soporta --audiences directamente —
+          # hay que impersonar la SA deployer para obtener un identity token válido.
+          ID_TOKEN=$(gcloud auth print-identity-token \
+            --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
+            --audiences="${SERVICE_URL}")
 
           MAX_ATTEMPTS=5
           ATTEMPT=1
