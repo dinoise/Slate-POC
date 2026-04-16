@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -87,15 +87,11 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_active_provider] = lambda: mock_provider
 
-    with (
-        patch("slate_api.core.notifier.start_listener", new=AsyncMock()),
-        patch("slate_api.core.notifier.stop_listener", new=AsyncMock()),
-    ):
-        async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test",
-        ) as c:
-            yield c
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as c:
+        yield c
 
     app.dependency_overrides.clear()
 
