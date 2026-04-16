@@ -47,15 +47,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Lint (ESLint)
-        run: pnpm --filter $(basename ${{ inputs.app-path }}) lint
+        run: pnpm --filter "@slate/$(basename ${{ inputs.app-path }})" lint
 
       - name: Type check (tsc)
-        run: pnpm --filter $(basename ${{ inputs.app-path }}) type-check
+        run: pnpm --filter "@slate/$(basename ${{ inputs.app-path }})" type-check
 
       - name: Tests con coverage
         id: tests
         run: |
-          pnpm --filter $(basename ${{ inputs.app-path }}) test:coverage
+          pnpm --filter "@slate/$(basename ${{ inputs.app-path }})" test:coverage
           echo "passed=true" >> $GITHUB_OUTPUT
 
       - name: Extraer porcentaje de coverage

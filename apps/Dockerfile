@@ -25,7 +25,7 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
     VITE_NOTIFICATIONS_URL=${VITE_NOTIFICATIONS_URL} \
     VITE_ENVIRONMENT=${VITE_ENVIRONMENT}
 
-RUN pnpm --filter $(basename ${APP_PATH}) build
+RUN pnpm --filter "@slate/$(basename ${APP_PATH})" build
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 # nginx-unprivileged: corre como usuario no-root, escucha en 8080 por defecto
