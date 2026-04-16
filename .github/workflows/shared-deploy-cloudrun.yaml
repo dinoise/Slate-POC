@@ -157,12 +157,15 @@ jobs:
 
       - name: Health check
         run: |
+          # Strip trailing slash — audience must match exactly what Cloud Run expects
           SERVICE_URL="${{ steps.deploy.outputs.url }}"
+          SERVICE_URL="${SERVICE_URL%/}"
           echo "🔍 Health check → ${SERVICE_URL}${{ inputs.health-check-path }}"
 
           # Obtener identity token con la URL del servicio como audience.
-          # Workload Identity Federation no soporta --audiences directamente —
-          # hay que impersonar la SA deployer para obtener un identity token válido.
+          # WIF no soporta --audiences directamente — se impersona la SA deployer.
+          # Requiere: roles/iam.serviceAccountTokenCreator en poc-deployer (SA resource)
+          #           roles/run.invoker en el servicio Cloud Run para poc-deployer
           ID_TOKEN=$(gcloud auth print-identity-token \
             --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
             --audiences="${SERVICE_URL}")
@@ -170,13 +173,14 @@ jobs:
           MAX_ATTEMPTS=5
           ATTEMPT=1
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            if curl -sf \
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
               -H "Authorization: Bearer ${ID_TOKEN}" \
-              "${SERVICE_URL}${{ inputs.health-check-path }}" > /dev/null 2>&1; then
-              echo "✅ Health check OK (intento ${ATTEMPT})"
+              "${SERVICE_URL}${{ inputs.health-check-path }}")
+            if [ "${HTTP_CODE}" = "200" ]; then
+              echo "✅ Health check OK (intento ${ATTEMPT}) — HTTP ${HTTP_CODE}"
               exit 0
             fi
-            echo "⏳ Intento ${ATTEMPT}/${MAX_ATTEMPTS} fallido — esperando 5s..."
+            echo "⏳ Intento ${ATTEMPT}/${MAX_ATTEMPTS} fallido — HTTP ${HTTP_CODE} — esperando 5s..."
             sleep 5
             ATTEMPT=$((ATTEMPT + 1))
           done
