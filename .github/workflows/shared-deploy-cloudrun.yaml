@@ -50,7 +50,7 @@ on:
       allow-unauthenticated:
         required: false
         type: boolean
-        default: true
+        default: false
       runtime-service-account:
         description: "Service account que ejecuta el contenedor (runtime). Si se omite, usa la SA por defecto del proyecto."
         required: false

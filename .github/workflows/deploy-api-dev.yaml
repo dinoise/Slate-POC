@@ -58,6 +58,7 @@ jobs:
       max-instances: 5
       timeout: 300s
       runtime-service-account: poc-api@lennken-poc.iam.gserviceaccount.com
+      allow-unauthenticated: false
       enable-iap: true
       vpc-network: default
       vpc-subnet: poc-cloudrun-subnet
