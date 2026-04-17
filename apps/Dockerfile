@@ -34,8 +34,10 @@ FROM nginxinc/nginx-unprivileged:stable-alpine AS runtime
 # Remover config por defecto
 RUN rm /etc/nginx/conf.d/default.conf
 
-# Copiar template de nginx — ${PORT} se sustituye en runtime via envsubst
-COPY apps/nginx.conf.template /etc/nginx/conf.d/default.conf.template
+# El entrypoint de nginx-unprivileged ejecuta 20-envsubst-on-templates.sh
+# automáticamente: procesa /etc/nginx/templates/*.template → /etc/nginx/conf.d/
+# Esto resuelve el problema de permisos — la sustitución ocurre como root en el entrypoint.
+COPY apps/nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # Copiar assets compilados desde el builder
 ARG APP_PATH
@@ -50,8 +52,3 @@ ARG ENVIRONMENT=production
 ENV PORT=8080
 
 EXPOSE 8080
-
-# envsubst sustituye ${PORT} en el template → default.conf, luego arranca nginx
-# exec garantiza que nginx sea PID 1 y reciba SIGTERM de Cloud Run correctamente
-CMD ["/bin/sh", "-c", \
-    "envsubst '$PORT' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
