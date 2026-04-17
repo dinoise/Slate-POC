@@ -161,16 +161,18 @@ jobs:
           SERVICE_URL="${SERVICE_URL%/}"
           echo "🔍 Health check → ${SERVICE_URL}${{ inputs.health-check-path }}"
 
-          # IAP con Google-Managed OAuth usa la service URL como audience.
-          # Requiere roles/iap.httpsResourceAccessor en poc-deployer para pasar por IAP.
-          # WIF requiere impersonación: roles/iam.serviceAccountTokenCreator en poc-deployer.
-          [ "${{ inputs.enable-iap }}" = "true" ] \
+          # Autenticación según el modo de acceso del servicio:
+          # - enable-iap=true : IAP intercepta, requiere cookie de usuario — no soportado en CI, skip auth
+          # - allow-unauthenticated=false : Cloud Run IAM valida Bearer token directamente
+          # - allow-unauthenticated=true : sin autenticación
+          # WIF requiere impersonación: roles/iam.serviceAccountTokenCreator + roles/run.invoker en poc-deployer.
+          [ "${{ inputs.allow-unauthenticated }}" = "false" ] && [ "${{ inputs.enable-iap }}" = "false" ] \
             && AUTH_HEADER="Authorization: Bearer $(gcloud auth print-identity-token \
                 --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
                 --audiences="${SERVICE_URL}" \
                 --include-email)" \
-            && echo "🔐 Modo IAP — audience: ${SERVICE_URL}" \
-            || echo "🔓 Sin IAP — sin autenticación"
+            && echo "🔐 Modo IAM — audience: ${SERVICE_URL}" \
+            || echo "🔓 Sin autenticación requerida"
 
           MAX_ATTEMPTS=5
           ATTEMPT=1
