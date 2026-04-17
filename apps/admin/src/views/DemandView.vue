@@ -1,73 +1,108 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
+import Badge from 'primevue/badge'
 import Select from 'primevue/select'
+import Button from 'primevue/button'
 import ProgressSpinner from 'primevue/progressspinner'
 import EmptyState from '../components/EmptyState.vue'
 import { demandApi } from '@slate/api-client'
-import type { DemandPrediction } from '@slate/types'
+import type { DemandPrediction, DemandSlot } from '@slate/types'
 
+const slots = ref<DemandSlot[]>([])
 const predictions = ref<DemandPrediction[]>([])
-const loading = ref(true)
+const loadingSlots = ref(true)
+const loadingPredictions = ref(false)
 const error = ref<string | null>(null)
 
-const filterDay = ref<number | null>(null)
-const filterHour = ref<number | null>(null)
+const selectedDay = ref<number | null>(null)
+const selectedHour = ref<number | null>(null)
 
-const dayOptions = [
-  { label: 'Todos los días', value: null },
-  { label: 'Lunes', value: 0 },
-  { label: 'Martes', value: 1 },
-  { label: 'Miércoles', value: 2 },
-  { label: 'Jueves', value: 3 },
-  { label: 'Viernes', value: 4 },
-  { label: 'Sábado', value: 5 },
-  { label: 'Domingo', value: 6 },
-]
+// Ciudad de México como bbox por defecto
+const DEFAULT_BBOX = '19.2,-99.4,19.6,-99.0'
 
-const dayName = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const dayName = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
-const hourOptions = [
-  { label: 'Todas las horas', value: null },
-  ...Array.from({ length: 24 }, (_, i) => ({
-    label: `${String(i).padStart(2, '0')}:00`,
-    value: i,
-  })),
-]
-
-const filtered = computed(() => {
-  let list = predictions.value
-  if (filterDay.value !== null) list = list.filter((p) => p.day_of_week === filterDay.value)
-  if (filterHour.value !== null) list = list.filter((p) => p.hour_of_day === filterHour.value)
-  return list
+const availableDays = computed(() => {
+  const days = [...new Set(slots.value.map((s) => s.dia_semana_num))].sort()
+  return days.map((d) => ({ label: dayName[d] ?? `Día ${d}`, value: d }))
 })
 
-const maxDemand = computed(() =>
-  Math.max(...filtered.value.map((p) => p.predicted_demand), 1),
+const availableHours = computed(() => {
+  if (selectedDay.value === null) return []
+  const hours = slots.value
+    .filter((s) => s.dia_semana_num === selectedDay.value)
+    .map((s) => s.hora_num)
+    .sort((a, b) => a - b)
+  return hours.map((h) => ({
+    label: `${String(h).padStart(2, '0')}:00`,
+    value: h,
+  }))
+})
+
+const demandLevelSeverity: Record<number, string> = {
+  0: 'secondary',
+  1: 'warn',
+  2: 'danger',
+}
+
+const demandLevelLabel: Record<number, string> = {
+  0: 'Baja',
+  1: 'Media',
+  2: 'Alta',
+}
+
+const maxPredAbs = computed(() =>
+  Math.max(...predictions.value.map((p) => p.pred_abs), 1),
 )
 
-function demandBarWidth(val: number): string {
-  return `${Math.round((val / maxDemand.value) * 100)}%`
+function barWidth(val: number): string {
+  return `${Math.round((val / maxPredAbs.value) * 100)}%`
 }
 
-function demandColor(val: number): string {
-  const ratio = val / maxDemand.value
-  if (ratio >= 0.75) return 'var(--p-red-400)'
-  if (ratio >= 0.5) return 'var(--p-yellow-400)'
-  if (ratio >= 0.25) return 'var(--p-blue-400)'
-  return 'var(--p-surface-500)'
-}
-
-onMounted(async () => {
+async function fetchPredictions() {
+  if (selectedDay.value === null || selectedHour.value === null) return
+  loadingPredictions.value = true
+  error.value = null
   try {
-    const res = await demandApi.list()
+    const res = await demandApi.bySlot({
+      dia_semana_num: selectedDay.value,
+      hora_num: selectedHour.value,
+      bbox: DEFAULT_BBOX,
+    })
     predictions.value = Array.isArray(res) ? res : []
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Error al cargar predicciones'
+    predictions.value = []
   } finally {
-    loading.value = false
+    loadingPredictions.value = false
+  }
+}
+
+watch(selectedDay, () => {
+  selectedHour.value = null
+  predictions.value = []
+})
+
+watch(selectedHour, (h) => {
+  if (h !== null) fetchPredictions()
+})
+
+onMounted(async () => {
+  try {
+    const res = await demandApi.slots()
+    slots.value = Array.isArray(res) ? res : []
+    // Auto-select first available slot
+    if (slots.value.length) {
+      selectedDay.value = slots.value[0].dia_semana_num
+      selectedHour.value = slots.value[0].hora_num
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Error al cargar slots disponibles'
+  } finally {
+    loadingSlots.value = false
   }
 })
 </script>
@@ -77,93 +112,110 @@ onMounted(async () => {
     <div class="view-header">
       <h1 class="view-title">Predicción de demanda</h1>
       <div class="view-filters">
-        <Select
-          v-model="filterDay"
-          :options="dayOptions"
-          option-label="label"
-          option-value="value"
-          class="filter-select"
-        />
-        <Select
-          v-model="filterHour"
-          :options="hourOptions"
-          option-label="label"
-          option-value="value"
-          class="filter-select"
-        />
+        <div v-if="loadingSlots" class="loading-inline">
+          <ProgressSpinner style="width:24px;height:24px" />
+        </div>
+        <template v-else>
+          <Select
+            v-model="selectedDay"
+            :options="availableDays"
+            option-label="label"
+            option-value="value"
+            placeholder="Día de la semana"
+            :disabled="!availableDays.length"
+            class="filter-select"
+          />
+          <Select
+            v-model="selectedHour"
+            :options="availableHours"
+            option-label="label"
+            option-value="value"
+            placeholder="Hora"
+            :disabled="selectedDay === null"
+            class="filter-select"
+          />
+          <Button
+            icon="pi pi-refresh"
+            severity="secondary"
+            :disabled="selectedHour === null"
+            :loading="loadingPredictions"
+            @click="fetchPredictions"
+          />
+        </template>
       </div>
     </div>
 
-    <div v-if="loading" class="view-loading">
-      <ProgressSpinner />
-    </div>
+    <EmptyState v-if="error && !loadingPredictions" icon="pi-exclamation-circle" :error="error" />
 
-    <EmptyState v-else-if="error" icon="pi-exclamation-circle" :error="error" />
+    <Card v-else>
+      <template #content>
+        <div v-if="loadingPredictions" class="view-loading">
+          <ProgressSpinner />
+        </div>
+        <DataTable
+          v-else
+          :value="predictions"
+          :rows="20"
+          paginator
+          sort-field="pred_abs"
+          :sort-order="-1"
+        >
+          <template #empty>
+            <EmptyState
+              icon="pi-chart-bar"
+              title="Sin predicciones"
+              :message="selectedHour === null
+                ? 'Selecciona un día y hora para ver las predicciones.'
+                : 'No hay datos para el slot seleccionado en esta zona.'"
+            />
+          </template>
 
-    <template v-else>
-      <Card>
-        <template #content>
-          <DataTable
-            :value="filtered"
-            :rows="20"
-            paginator
-            sort-field="predicted_demand"
-            :sort-order="-1"
-          >
-            <template #empty>
-              <EmptyState
-                icon="pi-chart-bar"
-                title="Sin predicciones"
-                message="No hay datos de predicción de demanda para los filtros seleccionados."
+          <Column field="h3_r8" header="Zona (H3)" style="width: 160px" />
+
+          <Column header="Lat / Lon" style="width: 160px">
+            <template #body="{ data }">
+              {{ data.lat.toFixed(4) }}, {{ data.lon.toFixed(4) }}
+            </template>
+          </Column>
+
+          <Column header="Nivel" style="width: 100px" sort-field="demand_level" sortable>
+            <template #body="{ data }">
+              <Badge
+                :value="demandLevelLabel[data.demand_level] ?? data.demand_level"
+                :severity="demandLevelSeverity[data.demand_level] ?? 'secondary'"
               />
             </template>
+          </Column>
 
-            <Column header="Día" style="width: 80px" sort-field="day_of_week" sortable>
-              <template #body="{ data }">
-                {{ dayName[data.day_of_week] ?? data.day_of_week }}
-              </template>
-            </Column>
-
-            <Column header="Hora" style="width: 80px" sort-field="hour_of_day" sortable>
-              <template #body="{ data }">
-                {{ String(data.hour_of_day).padStart(2, '0') }}:00
-              </template>
-            </Column>
-
-            <Column field="h3_index" header="Zona (H3)" style="width: 160px" />
-
-            <Column header="Lat / Lon" style="width: 160px">
-              <template #body="{ data }">
-                {{ data.latitude.toFixed(4) }}, {{ data.longitude.toFixed(4) }}
-              </template>
-            </Column>
-
-            <Column header="Demanda prevista" sort-field="predicted_demand" sortable>
-              <template #body="{ data }">
-                <div class="demand-bar-row">
-                  <div class="demand-bar-track">
-                    <div
-                      class="demand-bar-fill"
-                      :style="{
-                        width: demandBarWidth(data.predicted_demand),
-                        background: demandColor(data.predicted_demand),
-                      }"
-                    />
-                  </div>
-                  <span class="demand-value">{{ data.predicted_demand.toFixed(2) }}</span>
+          <Column header="Demanda absoluta" sort-field="pred_abs" sortable>
+            <template #body="{ data }">
+              <div class="demand-bar-row">
+                <div class="demand-bar-track">
+                  <div
+                    class="demand-bar-fill"
+                    :class="`demand-bar--level-${data.demand_level}`"
+                    :style="{ width: barWidth(data.pred_abs) }"
+                  />
                 </div>
-              </template>
-            </Column>
+                <span class="demand-value">{{ data.pred_abs.toFixed(2) }}</span>
+              </div>
+            </template>
+          </Column>
 
-            <Column header="Fecha" style="width: 140px" sort-field="prediction_date" sortable>
-              <template #body="{ data }">
-                {{ new Date(data.prediction_date).toLocaleDateString('es-MX') }}
-              </template>
-            </Column>
-          </DataTable>
-        </template>
-      </Card>
-    </template>
+          <Column header="Ratio" style="width: 90px" sort-field="pred_ratio" sortable>
+            <template #body="{ data }">
+              {{ data.pred_ratio.toFixed(3) }}
+            </template>
+          </Column>
+
+          <Column header="Versión modelo" style="width: 130px">
+            <template #body="{ data }">
+              <span class="muted">{{ data.model_version }}</span>
+            </template>
+          </Column>
+        </DataTable>
+      </template>
+    </Card>
   </div>
 </template>
 
@@ -196,11 +248,18 @@ onMounted(async () => {
 
 .view-filters {
   display: flex;
+  align-items: center;
   gap: 0.75rem;
 }
 
 .filter-select {
-  width: 180px;
+  width: 170px;
+}
+
+.loading-inline {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem;
 }
 
 .demand-bar-row {
@@ -221,14 +280,23 @@ onMounted(async () => {
 .demand-bar-fill {
   height: 100%;
   border-radius: 4px;
+  background: var(--p-surface-500);
   transition: width 0.3s ease;
 }
+
+.demand-bar--level-1 { background: var(--p-yellow-400); }
+.demand-bar--level-2 { background: var(--p-red-400); }
 
 .demand-value {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--p-surface-200);
-  min-width: 40px;
+  min-width: 42px;
   text-align: right;
+}
+
+.muted {
+  color: var(--p-surface-500);
+  font-size: 0.8rem;
 }
 </style>

@@ -4,6 +4,7 @@ import type {
   Assignment,
   AdjusterPosition,
   DemandPrediction,
+  DemandSlot,
   User,
   PaginatedResponse,
   ProviderSettings,
@@ -94,9 +95,15 @@ export const adjusterPositionsApi = {
 // ── Demand Predictions ────────────────────────────────────────────────────────
 
 export const demandApi = {
-  list: (params?: Record<string, string>) => {
-    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
-    return apiFetch<DemandPrediction[]>(`/api/v1/demand_predictions${qs}`)
+  slots: () =>
+    apiFetch<DemandSlot[]>('/api/v1/demand-predictions/available-slots'),
+  bySlot: (params: { hora_num: number; dia_semana_num: number; bbox: string }) => {
+    const qs = new URLSearchParams({
+      hora_num: String(params.hora_num),
+      dia_semana_num: String(params.dia_semana_num),
+      bbox: params.bbox,
+    }).toString()
+    return apiFetch<DemandPrediction[]>(`/api/v1/demand-predictions/?${qs}`)
   },
 }
 

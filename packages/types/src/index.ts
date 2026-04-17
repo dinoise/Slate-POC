@@ -75,13 +75,22 @@ export interface AdjusterPosition {
 
 export interface DemandPrediction {
   id: number
-  latitude: number
-  longitude: number
-  h3_index: string
-  hour_of_day: number
-  day_of_week: number
-  predicted_demand: number
-  prediction_date: string
+  lat: number
+  lon: number
+  h3_r8: string
+  hora_num: number
+  dia_semana_num: number
+  pred_ratio: number
+  pred_abs: number
+  demand_level: number  // 0=Low, 1=Med, 2=High
+  model_version: string
+  predicted_for: string
+  created_at: string
+}
+
+export interface DemandSlot {
+  dia_semana_num: number
+  hora_num: number
 }
 
 export interface User {
