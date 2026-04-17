@@ -95,9 +95,10 @@ onMounted(async () => {
     const res = await demandApi.slots()
     slots.value = Array.isArray(res) ? res : []
     // Auto-select first available slot
-    if (slots.value.length) {
-      selectedDay.value = slots.value[0].dia_semana_num
-      selectedHour.value = slots.value[0].hora_num
+    const first = slots.value[0]
+    if (first) {
+      selectedDay.value = first.dia_semana_num
+      selectedHour.value = first.hora_num
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Error al cargar slots disponibles'

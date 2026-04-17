@@ -38,7 +38,9 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 
 function parseJwt(token: string): DecodedToken {
-  const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+  const part = token.split('.')[1]
+  if (!part) throw new Error('Invalid JWT')
+  const base64 = part.replace(/-/g, '+').replace(/_/g, '/')
   return JSON.parse(decodeURIComponent(
     atob(base64).split('').map((c) =>
       '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
