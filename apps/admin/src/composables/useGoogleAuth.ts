@@ -17,12 +17,13 @@ declare global {
 }
 
 interface PromptNotification {
-  isNotDisplayed: () => boolean
-  isSkippedMoment: () => boolean
-  isDismissedMoment: () => boolean
-  getNotDisplayedReason: () => string
-  getSkippedReason: () => string
-  getDismissedReason: () => string
+  // Estos métodos existen en One Tap legacy pero pueden no estar en FedCM
+  isNotDisplayed?: () => boolean
+  isSkippedMoment?: () => boolean
+  isDismissedMoment?: () => boolean
+  getNotDisplayedReason?: () => string
+  getSkippedReason?: () => string
+  getDismissedReason?: () => string
 }
 
 interface GoogleCredentialResponse {
@@ -111,13 +112,17 @@ export function useGoogleAuth() {
       })
 
       if (!user.value) {
-        // Callback de diagnóstico: si One Tap es suprimido, mostramos el botón explícito
+        // Callback de diagnóstico compatible con FedCM y One Tap legacy.
+        // isNotDisplayed/isSkippedMoment serán deprecated con FedCM obligatorio —
+        // el botón explícito (renderButton) es el fallback recomendado por Google.
         window.google.accounts.id.prompt((notification) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            const reason = notification.isNotDisplayed()
-              ? notification.getNotDisplayedReason()
-              : notification.getSkippedReason()
-            console.info('[GIS] One Tap suprimido:', reason)
+          const notDisplayed = notification.isNotDisplayed?.()
+          const skipped = notification.isSkippedMoment?.()
+          if (notDisplayed || skipped) {
+            const reason = notDisplayed
+              ? notification.getNotDisplayedReason?.()
+              : notification.getSkippedReason?.()
+            console.info('[GIS] One Tap suprimido:', reason ?? 'unknown')
             promptSuppressed.value = true
           }
         })
