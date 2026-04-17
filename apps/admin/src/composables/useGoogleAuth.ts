@@ -7,12 +7,22 @@ declare global {
       accounts: {
         id: {
           initialize: (config: object) => void
-          prompt: () => void
+          prompt: (callback?: (notification: PromptNotification) => void) => void
+          renderButton: (element: HTMLElement, config: object) => void
           disableAutoSelect: () => void
         }
       }
     }
   }
+}
+
+interface PromptNotification {
+  isNotDisplayed: () => boolean
+  isSkippedMoment: () => boolean
+  isDismissedMoment: () => boolean
+  getNotDisplayedReason: () => string
+  getSkippedReason: () => string
+  getDismissedReason: () => string
 }
 
 interface GoogleCredentialResponse {
@@ -36,6 +46,8 @@ export interface AuthUser {
 const user = ref<AuthUser | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
+// true cuando One Tap fue suprimido — LoginView muestra el botón explícito
+const promptSuppressed = ref(false)
 
 function parseJwt(token: string): DecodedToken {
   const part = token.split('.')[1]
@@ -51,7 +63,7 @@ function parseJwt(token: string): DecodedToken {
 function isTokenExpired(token: string): boolean {
   try {
     const { exp } = parseJwt(token)
-    return Date.now() / 1000 > exp - 30 // 30s de margen
+    return Date.now() / 1000 > exp - 30
   } catch {
     return true
   }
@@ -60,15 +72,11 @@ function isTokenExpired(token: string): boolean {
 function handleCredentialResponse(response: GoogleCredentialResponse) {
   try {
     const decoded = parseJwt(response.credential)
-    user.value = {
-      email: decoded.email,
-      name: decoded.name,
-      picture: decoded.picture,
-    }
+    user.value = { email: decoded.email, name: decoded.name, picture: decoded.picture }
     setAuthToken(response.credential)
-    // Persist token for page reloads
     sessionStorage.setItem('gid_token', response.credential)
     error.value = null
+    promptSuppressed.value = false
   } catch {
     error.value = 'Error al procesar credencial de Google'
   }
@@ -98,22 +106,40 @@ export function useGoogleAuth() {
       window.google.accounts.id.initialize({
         client_id: clientId,
         callback: handleCredentialResponse,
-        auto_select: true,        // intenta sesión silenciosa si ya hay cuenta
+        auto_select: true,
         cancel_on_tap_outside: false,
       })
 
-      // Solo muestra prompt si no hay token válido
       if (!user.value) {
-        window.google.accounts.id.prompt()
+        // Callback de diagnóstico: si One Tap es suprimido, mostramos el botón explícito
+        window.google.accounts.id.prompt((notification) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            const reason = notification.isNotDisplayed()
+              ? notification.getNotDisplayedReason()
+              : notification.getSkippedReason()
+            console.info('[GIS] One Tap suprimido:', reason)
+            promptSuppressed.value = true
+          }
+        })
       }
     }
     document.head.appendChild(script)
   }
 
+  function renderButton(element: HTMLElement) {
+    if (!window.google) return
+    window.google.accounts.id.renderButton(element, {
+      type: 'standard',
+      theme: 'filled_black',
+      size: 'large',
+      text: 'signin_with',
+      shape: 'rectangular',
+      width: 280,
+    })
+  }
+
   function signOut() {
-    if (window.google) {
-      window.google.accounts.id.disableAutoSelect()
-    }
+    if (window.google) window.google.accounts.id.disableAutoSelect()
     sessionStorage.removeItem('gid_token')
     setAuthToken(null)
     user.value = null
@@ -124,5 +150,5 @@ export function useGoogleAuth() {
     return !!stored && !isTokenExpired(stored)
   }
 
-  return { user, loading, error, initialize, signOut, isAuthenticated }
+  return { user, loading, error, promptSuppressed, initialize, renderButton, signOut, isAuthenticated }
 }

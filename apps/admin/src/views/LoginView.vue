@@ -1,18 +1,28 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGoogleAuth } from '../composables/useGoogleAuth'
 
 const router = useRouter()
-const { user, loading, error, initialize } = useGoogleAuth()
+const { user, error, promptSuppressed, initialize, renderButton } = useGoogleAuth()
+
+const buttonContainer = ref<HTMLElement | null>(null)
+
+// Cuando One Tap es suprimido, renderizamos el botón explícito de Google
+watch(promptSuppressed, (suppressed) => {
+  if (suppressed && buttonContainer.value) {
+    renderButton(buttonContainer.value)
+  }
+})
+
+// Si el usuario ya se autenticó, redirige
+watch(user, (u) => {
+  if (u) router.push('/')
+}, { immediate: true })
 
 onMounted(() => {
   initialize()
 })
-
-function continuar() {
-  router.push('/')
-}
 </script>
 
 <template>
@@ -24,27 +34,26 @@ function continuar() {
       <h1 class="login-title">Slate Admin</h1>
       <p class="login-subtitle">Inicia sesión con tu cuenta de Google</p>
 
-      <div v-if="loading" class="login-loading">
-        <span class="pi pi-spin pi-spinner" />
-      </div>
-
-      <div v-else-if="user" class="login-success">
+      <template v-if="user">
         <div class="user-avatar">
           <img v-if="user.picture" :src="user.picture" :alt="user.name" class="avatar-img" />
           <span v-else class="pi pi-user avatar-fallback" />
         </div>
         <p class="user-name">{{ user.name }}</p>
         <p class="user-email">{{ user.email }}</p>
-        <button class="continue-btn" @click="continuar">
-          Continuar al dashboard
-          <span class="pi pi-arrow-right" />
-        </button>
-      </div>
+        <p class="login-hint">Redirigiendo…</p>
+      </template>
 
-      <div v-else class="login-prompt">
-        <p class="login-hint">Se abrirá el selector de cuenta de Google…</p>
+      <template v-else>
+        <!-- Botón explícito de Google — siempre montado en el DOM,
+             GIS lo rellena cuando One Tap es suprimido -->
+        <div ref="buttonContainer" class="google-button-container" />
+
+        <p v-if="!promptSuppressed" class="login-hint">
+          Se abrirá el selector de cuenta de Google…
+        </p>
         <p v-if="error" class="login-error">{{ error }}</p>
-      </div>
+      </template>
     </div>
   </div>
 </template>
@@ -101,20 +110,6 @@ function continuar() {
   margin: 0 0 1rem;
 }
 
-.login-loading {
-  font-size: 1.5rem;
-  color: var(--p-surface-400);
-  padding: 1rem;
-}
-
-.login-success {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-}
-
 .user-avatar {
   width: 56px;
   height: 56px;
@@ -147,35 +142,14 @@ function continuar() {
 .user-email {
   font-size: 0.85rem;
   color: var(--p-surface-400);
-  margin: 0 0 0.75rem;
+  margin: 0;
 }
 
-.continue-btn {
+.google-button-container {
+  margin: 0.5rem 0;
+  min-height: 44px;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: var(--p-primary-500);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 0.65rem 1.25rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-  width: 100%;
   justify-content: center;
-}
-
-.continue-btn:hover {
-  background: var(--p-primary-400);
-}
-
-.login-prompt {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  align-items: center;
 }
 
 .login-hint {
