@@ -19,15 +19,21 @@ on:
         required: false
         type: string
         default: "dev"
+      vite-api-base-url:
+        description: "URL base de la API para el frontend (incrustada en el bundle)"
+        required: false
+        type: string
+        default: ""
+      vite-notifications-url:
+        description: "URL del servicio de notificaciones SSE"
+        required: false
+        type: string
+        default: ""
     secrets:
       project-id:
         required: true
       workload-identity-provider:
         required: true
-      vite-api-base-url:
-        required: true
-      vite-notifications-url:
-        required: false
     outputs:
       image-tag:
         value: ${{ jobs.build.outputs.image-tag }}
@@ -96,6 +102,6 @@ jobs:
             VERSION=${{ steps.meta.outputs.image-tag }}
             APP_PATH=${{ inputs.app-path }}
             ENVIRONMENT=${{ inputs.environment }}
-            VITE_API_BASE_URL=${{ secrets.vite-api-base-url }}
-            VITE_NOTIFICATIONS_URL=${{ secrets.vite-notifications-url }}
+            VITE_API_BASE_URL=${{ inputs.vite-api-base-url }}
+            VITE_NOTIFICATIONS_URL=${{ inputs.vite-notifications-url }}
             VITE_ENVIRONMENT=${{ inputs.environment }}

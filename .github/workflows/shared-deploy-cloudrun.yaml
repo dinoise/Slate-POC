@@ -97,6 +97,16 @@ on:
         required: false
         type: string
         default: ""
+      cloudrun-env-vars:
+        description: |
+          Variables de entorno planas (no sensitivas) para el contenedor.
+          Formato multilínea (un par por línea): KEY=value
+          Ejemplo:
+            CORS_ORIGINS=https://app.example.com,https://admin.example.com
+            VITE_API_BASE_URL=https://api.example.com
+        required: false
+        type: string
+        default: ""
     secrets:
       project-id:
         required: true
@@ -135,13 +145,15 @@ jobs:
           image: ${{ inputs.image-registry }}/${{ secrets.project-id }}/poc-images/${{ inputs.image-service-name }}:${{ inputs.image-tag }}
           region: ${{ inputs.region }}
           secrets: ${{ inputs.cloudrun-secrets }}
+          env_vars: |
+            ENVIRONMENT=${{ inputs.environment }}
+            ${{ inputs.cloudrun-env-vars }}
           flags: >-
             --memory=${{ inputs.memory }}
             --cpu=${{ inputs.cpu }}
             --min-instances=${{ inputs.min-instances }}
             --max-instances=${{ inputs.max-instances }}
             --timeout=${{ inputs.timeout }}
-            --set-env-vars=ENVIRONMENT=${{ inputs.environment }}
             ${{ inputs.allow-unauthenticated && '--allow-unauthenticated' || '--no-allow-unauthenticated' }}
             ${{ inputs.runtime-service-account != '' && format('--service-account={0}', inputs.runtime-service-account) || '' }}
             ${{ inputs.vpc-network != '' && format('--network={0} --subnet={1} --vpc-egress={2}', inputs.vpc-network, inputs.vpc-subnet, inputs.vpc-egress) || '' }}
