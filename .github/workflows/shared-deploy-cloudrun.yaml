@@ -76,6 +76,11 @@ on:
         required: false
         type: boolean
         default: false
+      skip-health-check:
+        description: "Omitir el health check post-deploy (útil cuando IAP impide llamadas programáticas)"
+        required: false
+        type: boolean
+        default: false
       health-check-path:
         description: "Path del health check, e.g. /health o /healthz"
         required: false
@@ -156,6 +161,7 @@ jobs:
           echo "✅ IAP service agent configurado"
 
       - name: Health check
+        if: ${{ !inputs.skip-health-check && !inputs.enable-iap }}
         run: |
           SERVICE_URL="${{ steps.deploy.outputs.url }}"
           SERVICE_URL="${SERVICE_URL%/}"
@@ -166,7 +172,7 @@ jobs:
           # - allow-unauthenticated=false : Cloud Run IAM valida Bearer token directamente
           # - allow-unauthenticated=true : sin autenticación
           # WIF requiere impersonación: roles/iam.serviceAccountTokenCreator + roles/run.invoker en poc-deployer.
-          [ "${{ inputs.allow-unauthenticated }}" = "false" ] && [ "${{ inputs.enable-iap }}" = "false" ] \
+          [ "${{ inputs.allow-unauthenticated }}" = "false" ] \
             && AUTH_HEADER="Authorization: Bearer $(gcloud auth print-identity-token \
                 --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
                 --audiences="${SERVICE_URL}" \
