@@ -3,11 +3,11 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .core import close_db, get_logger, init_db, settings, setup_logging
+from .core import close_db, get_logger, init_db, settings, setup_logging, verify_google_token
 from .core.exceptions import AppException
 from .core.provider_registry import init_provider
 from .routes import (
@@ -94,15 +94,18 @@ async def health_check() -> dict[str, str]:
     return {"status": "healthy", "version": settings.VERSION}
 
 
+# Auth dependency applied to all API routers — /health is excluded (no prefix)
+_auth = [Depends(verify_google_token)]
+
 # Register routers
-app.include_router(incidents_router, prefix=settings.API_V1_PREFIX)
-app.include_router(adjusters_router, prefix=settings.API_V1_PREFIX)
-app.include_router(assignments_router, prefix=settings.API_V1_PREFIX)
-app.include_router(demand_predictions_router, prefix=settings.API_V1_PREFIX)
-app.include_router(adjuster_positions_router, prefix=settings.API_V1_PREFIX)
-app.include_router(recommendations_router, prefix=settings.API_V1_PREFIX)
-app.include_router(settings_router, prefix=settings.API_V1_PREFIX)
-app.include_router(users_router, prefix=settings.API_V1_PREFIX)
+app.include_router(incidents_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(adjusters_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(assignments_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(demand_predictions_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(adjuster_positions_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(recommendations_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(settings_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(users_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
 
 
 if __name__ == "__main__":

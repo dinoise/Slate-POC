@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = ""
 
+    # Google OAuth — Client ID para verificar tokens de GIS del frontend
+    GOOGLE_CLIENT_ID: str = ""
+
     # Logging
     LOG_LEVEL: str = ""
 
