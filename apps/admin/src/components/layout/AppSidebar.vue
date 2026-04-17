@@ -2,7 +2,7 @@
 import { useRoute } from 'vue-router'
 import Menu from 'primevue/menu'
 
-const route = useRoute()
+const route = useRoute() ?? { path: '' }
 
 const items = [
   {
