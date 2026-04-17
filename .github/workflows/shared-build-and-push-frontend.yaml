@@ -29,6 +29,11 @@ on:
         required: false
         type: string
         default: ""
+      vite-google-client-id:
+        description: "OAuth 2.0 Client ID de Google para autenticación en el browser"
+        required: false
+        type: string
+        default: ""
     secrets:
       project-id:
         required: true
@@ -104,4 +109,5 @@ jobs:
             ENVIRONMENT=${{ inputs.environment }}
             VITE_API_BASE_URL=${{ inputs.vite-api-base-url }}
             VITE_NOTIFICATIONS_URL=${{ inputs.vite-notifications-url }}
+            VITE_GOOGLE_CLIENT_ID=${{ inputs.vite-google-client-id }}
             VITE_ENVIRONMENT=${{ inputs.environment }}

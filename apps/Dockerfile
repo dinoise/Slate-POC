@@ -19,10 +19,12 @@ RUN pnpm install --frozen-lockfile
 # Build args para variables de Vite (se hornean en el bundle en build time)
 ARG VITE_API_BASE_URL
 ARG VITE_NOTIFICATIONS_URL
+ARG VITE_GOOGLE_CLIENT_ID
 ARG VITE_ENVIRONMENT=production
 
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
     VITE_NOTIFICATIONS_URL=${VITE_NOTIFICATIONS_URL} \
+    VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID} \
     VITE_ENVIRONMENT=${VITE_ENVIRONMENT}
 
 RUN pnpm --filter "@slate/$(basename ${APP_PATH})" build

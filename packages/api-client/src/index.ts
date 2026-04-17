@@ -11,14 +11,30 @@ import type {
   AssignmentStatus,
 } from '@slate/types'
 
+// ── Auth token ────────────────────────────────────────────────────────────────
+
+let _authToken: string | null = null
+
+export function setAuthToken(token: string | null): void {
+  _authToken = token
+}
+
+export function getAuthToken(): string | null {
+  return _authToken
+}
+
 // ── Base fetch ────────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const baseUrl = (import.meta as ImportMeta & { env: { VITE_API_BASE_URL: string } }).env.VITE_API_BASE_URL ?? ''
-  const res = await fetch(`${baseUrl}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
-    ...init,
-  })
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(init?.headers as Record<string, string>),
+  }
+  if (_authToken) {
+    headers['Authorization'] = `Bearer ${_authToken}`
+  }
+  const res = await fetch(`${baseUrl}${path}`, { ...init, headers })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'API error')
