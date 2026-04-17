@@ -53,8 +53,8 @@ app = FastAPI(
     version=settings.VERSION,
     description="Sistema de asignación dinámica de ajustadores de seguros",
     lifespan=lifespan,
-    docs_url="/docs" if settings.DEBUG else None,
-    redoc_url="/redoc" if settings.DEBUG else None,
+    docs_url="/docs" if settings.is_local else None,
+    redoc_url="/redoc" if settings.is_local else None,
     redirect_slashes=False,
 )
 
