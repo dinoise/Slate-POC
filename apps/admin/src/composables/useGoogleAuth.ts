@@ -67,7 +67,7 @@ function handleCredentialResponse(response: GoogleCredentialResponse) {
     // Persist token for page reloads
     sessionStorage.setItem('gid_token', response.credential)
     error.value = null
-  } catch (e) {
+  } catch {
     error.value = 'Error al procesar credencial de Google'
   }
 }
