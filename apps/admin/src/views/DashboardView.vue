@@ -6,6 +6,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Badge from 'primevue/badge'
 import ProgressSpinner from 'primevue/progressspinner'
+import EmptyState from '../components/EmptyState.vue'
 import { useIncidentsStore } from '../stores/incidents'
 import { useAdjustersStore } from '../stores/adjusters'
 import { useAssignmentsStore } from '../stores/assignments'
@@ -144,6 +145,14 @@ onMounted(() => {
               {{ new Date(data.created_at).toLocaleString('es-MX') }}
             </template>
           </Column>
+          <template #empty>
+            <EmptyState
+              icon="pi-exclamation-triangle"
+              title="Sin incidentes"
+              :message="incidentsStore.error ?? 'No hay incidentes registrados aún.'"
+              :error="incidentsStore.error"
+            />
+          </template>
         </DataTable>
       </template>
     </Card>

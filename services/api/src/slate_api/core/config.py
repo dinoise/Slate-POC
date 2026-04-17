@@ -2,13 +2,11 @@
 
 import os
 from functools import lru_cache
-from typing import Any
 
 from pydantic import (
     PostgresDsn,
     RedisDsn,
     computed_field,
-    field_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -68,7 +66,7 @@ class Settings(BaseSettings):
     GOOGLE_ROUTES_API_KEY: str = ""
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8000"]
+    CORS_ORIGINS: str = ""
 
     # Logging
     LOG_LEVEL: str = ""
@@ -99,13 +97,10 @@ class Settings(BaseSettings):
             return self.LOG_LEVEL
         return "DEBUG" if self.is_local else "INFO"
 
-    @field_validator("CORS_ORIGINS", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v: Any) -> list[str]:
-        """Parse CORS origins from string or list."""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS_ORIGINS CSV string into list."""
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
 
 @lru_cache
