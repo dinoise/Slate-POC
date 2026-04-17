@@ -76,11 +76,6 @@ on:
         required: false
         type: boolean
         default: false
-      iap-client-id:
-        description: "OAuth2 client ID de IAP (formato: NNNNNN-abc.apps.googleusercontent.com). Requerido cuando enable-iap=true para que el health check use el audience correcto."
-        required: false
-        type: string
-        default: ""
       health-check-path:
         description: "Path del health check, e.g. /health o /healthz"
         required: false
@@ -164,18 +159,17 @@ jobs:
         run: |
           SERVICE_URL="${{ steps.deploy.outputs.url }}"
           SERVICE_URL="${SERVICE_URL%/}"
-          IAP_CLIENT_ID="${{ inputs.iap-client-id }}"
           echo "🔍 Health check → ${SERVICE_URL}${{ inputs.health-check-path }}"
 
-          # Si hay IAP client ID, obtener token con ese audience; sino, dejar AUTH_HEADER vacío.
-          # IAP valida aud = resource path; Cloud Run sin IAP valida aud = service URL.
+          # IAP con Google-Managed OAuth usa la service URL como audience.
+          # Requiere roles/iap.httpsResourceAccessor en poc-deployer para pasar por IAP.
           # WIF requiere impersonación: roles/iam.serviceAccountTokenCreator en poc-deployer.
-          [ -n "${IAP_CLIENT_ID}" ] \
+          [ "${{ inputs.enable-iap }}" = "true" ] \
             && AUTH_HEADER="Authorization: Bearer $(gcloud auth print-identity-token \
                 --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
-                --audiences="${IAP_CLIENT_ID}" \
+                --audiences="${SERVICE_URL}" \
                 --include-email)" \
-            && echo "🔐 Modo IAP — audience: ${IAP_CLIENT_ID}" \
+            && echo "🔐 Modo IAP — audience: ${SERVICE_URL}" \
             || echo "🔓 Sin IAP — sin autenticación"
 
           MAX_ATTEMPTS=5

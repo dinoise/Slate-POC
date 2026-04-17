@@ -53,7 +53,6 @@ jobs:
       timeout: 60s
       allow-unauthenticated: false
       enable-iap: true
-      iap-client-id: /projects/43634032496/locations/us-central1/services/slate-reporter-dev
       health-check-path: /healthz
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
