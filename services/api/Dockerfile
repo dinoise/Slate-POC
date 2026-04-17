@@ -61,4 +61,4 @@ ARG LOG_LEVEL=INFO
 ENV ENVIRONMENT=${ENVIRONMENT} \
     LOG_LEVEL=${LOG_LEVEL}
 
-CMD ["sh", "-c", "python -m uvicorn slate_api.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1"]
+CMD ["sh", "-c", "python -m uvicorn slate_api.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1 --forwarded-allow-ips='*'"]
