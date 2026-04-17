@@ -7,6 +7,15 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'jsdom',
+      // vuetify imports CSS directly from node_modules — Node can't handle it.
+      // Inlining tells vitest to run vuetify through vite-node instead of Node.
+      server: {
+        deps: {
+          inline: ['vuetify'],
+        },
+      },
+      // Polyfill ResizeObserver, IntersectionObserver, CSS.supports for jsdom
+      setupFiles: ['./src/__tests__/setup.ts'],
       exclude: [...configDefaults.exclude, 'e2e/**'],
       root: fileURLToPath(new URL('./', import.meta.url)),
       coverage: {
