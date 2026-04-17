@@ -60,6 +60,7 @@ jobs:
       runtime-service-account: poc-api@lennken-poc.iam.gserviceaccount.com
       allow-unauthenticated: false
       enable-iap: true
+      iap-client-id: /projects/43634032496/locations/us-central1/services/slate-api-dev
       vpc-network: default
       vpc-subnet: poc-cloudrun-subnet
       cloudrun-secrets: |

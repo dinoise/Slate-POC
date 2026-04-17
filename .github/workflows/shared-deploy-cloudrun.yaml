@@ -76,6 +76,11 @@ on:
         required: false
         type: boolean
         default: false
+      iap-client-id:
+        description: "OAuth2 client ID de IAP (formato: NNNNNN-abc.apps.googleusercontent.com). Requerido cuando enable-iap=true para que el health check use el audience correcto."
+        required: false
+        type: string
+        default: ""
       health-check-path:
         description: "Path del health check, e.g. /health o /healthz"
         required: false
@@ -157,27 +162,29 @@ jobs:
 
       - name: Health check
         run: |
-          # Strip trailing slash — audience must match exactly what Cloud Run expects
           SERVICE_URL="${{ steps.deploy.outputs.url }}"
           SERVICE_URL="${SERVICE_URL%/}"
           echo "🔍 Health check → ${SERVICE_URL}${{ inputs.health-check-path }}"
 
-          # Obtener identity token con la URL del servicio como audience.
+          # Cuando IAP está activo, el audience debe ser el OAuth2 client ID de IAP,
+          # NO la service URL. IAP valida el JWT audience antes de forwarding al contenedor.
+          # Sin IAP, se usa la service URL como audience (validado por Cloud Run directamente).
+          IAP_CLIENT_ID="${{ inputs.iap-client-id }}"
+          if [ -n "${IAP_CLIENT_ID}" ]; then
+            AUDIENCE="${IAP_CLIENT_ID}"
+            echo "🔐 Modo IAP — audience: ${AUDIENCE}"
+          else
+            AUDIENCE="${SERVICE_URL}"
+            echo "🔓 Sin IAP — audience: ${AUDIENCE}"
+          fi
+
           # WIF no soporta --audiences directamente — se impersona la SA deployer.
           # Requiere: roles/iam.serviceAccountTokenCreator en poc-deployer (SA resource)
           #           roles/run.invoker en el servicio Cloud Run para poc-deployer
           ID_TOKEN=$(gcloud auth print-identity-token \
             --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
-            --audiences="${SERVICE_URL}" \
+            --audiences="${AUDIENCE}" \
             --include-email)
-
-          # Debug: ver body completo del primer intento
-          echo "── Respuesta completa (primer intento) ──"
-          curl -si \
-            -H "Authorization: Bearer ${ID_TOKEN}" \
-            "${SERVICE_URL}${{ inputs.health-check-path }}" || true
-          echo ""
-          echo "─────────────────────────────────────────"
 
           MAX_ATTEMPTS=5
           ATTEMPT=1
