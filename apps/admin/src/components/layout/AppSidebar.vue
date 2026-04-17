@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Menu from 'primevue/menu'
+import { useGoogleAuth } from '../../composables/useGoogleAuth'
 
 const route = useRoute() ?? { path: '' }
+const router = useRouter()
+const { user, signOut } = useGoogleAuth()
+
+function handleSignOut() {
+  signOut()
+  router.push('/login')
+}
 
 const items = [
   {
@@ -43,6 +51,7 @@ const items = [
       <span class="pi pi-compass sidebar-logo" />
       <span class="sidebar-title">Despacho</span>
     </div>
+
     <Menu :model="items" class="sidebar-menu">
       <template #item="{ item }">
         <router-link
@@ -56,6 +65,21 @@ const items = [
         </router-link>
       </template>
     </Menu>
+
+    <div class="sidebar-footer">
+      <div v-if="user" class="user-info">
+        <img v-if="user.picture" :src="user.picture" :alt="user.name" class="user-avatar" />
+        <span v-else class="pi pi-user user-avatar-fallback" />
+        <div class="user-text">
+          <span class="user-name">{{ user.name }}</span>
+          <span class="user-email">{{ user.email }}</span>
+        </div>
+      </div>
+      <button class="logout-btn" @click="handleSignOut">
+        <span class="pi pi-sign-out" />
+        <span>Cerrar sesión</span>
+      </button>
+    </div>
   </aside>
 </template>
 
@@ -120,5 +144,85 @@ const items = [
   background: var(--p-primary-900);
   color: var(--p-primary-300);
   font-weight: 600;
+}
+
+.sidebar-footer {
+  border-top: 1px solid var(--p-surface-700);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.25rem 0.25rem;
+  overflow: hidden;
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.user-avatar-fallback {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--p-surface-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  color: var(--p-surface-400);
+  flex-shrink: 0;
+}
+
+.user-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.user-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--p-surface-100);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-email {
+  font-size: 0.7rem;
+  color: var(--p-surface-500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--p-surface-400);
+  font-size: 0.875rem;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.15s, color 0.15s;
+}
+
+.logout-btn:hover {
+  background: var(--p-surface-700);
+  color: var(--p-red-400);
 }
 </style>

@@ -7,23 +7,13 @@ declare global {
       accounts: {
         id: {
           initialize: (config: object) => void
-          prompt: (callback?: (notification: PromptNotification) => void) => void
+          prompt: () => void
           renderButton: (element: HTMLElement, config: object) => void
           disableAutoSelect: () => void
         }
       }
     }
   }
-}
-
-interface PromptNotification {
-  // Estos métodos existen en One Tap legacy pero pueden no estar en FedCM
-  isNotDisplayed?: () => boolean
-  isSkippedMoment?: () => boolean
-  isDismissedMoment?: () => boolean
-  getNotDisplayedReason?: () => string
-  getSkippedReason?: () => string
-  getDismissedReason?: () => string
 }
 
 interface GoogleCredentialResponse {
@@ -109,23 +99,16 @@ export function useGoogleAuth() {
         callback: handleCredentialResponse,
         auto_select: true,
         cancel_on_tap_outside: false,
+        use_fedcm_for_prompt: true,
       })
 
       if (!user.value) {
-        // Callback de diagnóstico compatible con FedCM y One Tap legacy.
-        // isNotDisplayed/isSkippedMoment serán deprecated con FedCM obligatorio —
-        // el botón explícito (renderButton) es el fallback recomendado por Google.
-        window.google.accounts.id.prompt((notification) => {
-          const notDisplayed = notification.isNotDisplayed?.()
-          const skipped = notification.isSkippedMoment?.()
-          if (notDisplayed || skipped) {
-            const reason = notDisplayed
-              ? notification.getNotDisplayedReason?.()
-              : notification.getSkippedReason?.()
-            console.info('[GIS] One Tap suprimido:', reason ?? 'unknown')
-            promptSuppressed.value = true
-          }
-        })
+        // Con FedCM el prompt es gestionado por el browser — no hay callback de estado.
+        // Si no hay interacción en 500ms asumimos que fue suprimido y mostramos el botón.
+        window.google.accounts.id.prompt()
+        setTimeout(() => {
+          if (!user.value) promptSuppressed.value = true
+        }, 500)
       }
     }
     document.head.appendChild(script)
