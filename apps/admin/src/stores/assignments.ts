@@ -40,7 +40,7 @@ export const useAssignmentsStore = defineStore('assignments', () => {
 
   async function updateStatus(id: number, status: Assignment['status']) {
     try {
-      const updated = await assignmentsApi.update(id, { status })
+      const updated = await assignmentsApi.updateStatus(id, status)
       const idx = items.value.findIndex((a) => a.id === id)
       if (idx !== -1) items.value[idx] = updated
       if (selected.value?.id === id) selected.value = updated

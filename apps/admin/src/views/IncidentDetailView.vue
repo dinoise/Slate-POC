@@ -19,11 +19,10 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 
 const ASSIGNMENT_STEPS: Assignment['status'][] = [
-  'pending', 'assigned', 'accepted', 'en_route', 'arrived', 'completed',
+  'assigned', 'accepted', 'en_route', 'arrived', 'completed',
 ]
 
 const stepLabel: Record<string, string> = {
-  pending: 'Pendiente',
   assigned: 'Asignado',
   accepted: 'Aceptado',
   en_route: 'En camino',

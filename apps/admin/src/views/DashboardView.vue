@@ -23,7 +23,7 @@ const availableAdjusters = computed(() =>
   adjustersStore.items.filter((a) => a.status === 'available').length,
 )
 const pendingAssignments = computed(() =>
-  assignmentsStore.items.filter((a) => a.status === 'pending').length,
+  assignmentsStore.items.filter((a) => a.status === 'assigned').length,
 )
 
 const recentIncidents = computed(() =>

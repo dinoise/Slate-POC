@@ -319,6 +319,9 @@ importers:
 
   packages/api-client:
     dependencies:
+      '@slate/types':
+        specifier: workspace:*
+        version: link:../types
       vue:
         specifier: ^3.4.0
         version: 3.5.32(typescript@5.9.3)
