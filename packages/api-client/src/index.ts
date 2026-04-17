@@ -73,7 +73,7 @@ export const adjustersApi = {
   update: (id: number, data: Partial<Adjuster>) =>
     apiFetch<Adjuster>(`/api/v1/adjusters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiFetch<void>(`/api/v1/adjusters/${id}`, { method: 'DELETE' }),
-  available: () => apiFetch<Adjuster[]>('/api/v1/adjusters/available/'),
+  available: () => apiFetch<Adjuster[]>('/api/v1/adjusters/available'),
   resetStatus: () => apiFetch<void>('/api/v1/adjusters/reset-status', { method: 'POST' }),
 }
 
@@ -119,7 +119,7 @@ export const demandApi = {
       dia_semana_num: String(params.dia_semana_num),
       bbox: params.bbox,
     }).toString()
-    return apiFetch<DemandPrediction[]>(`/api/v1/demand-predictions/?${qs}`)
+    return apiFetch<DemandPrediction[]>(`/api/v1/demand-predictions?${qs}`)
   },
 }
 
