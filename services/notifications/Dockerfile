@@ -45,7 +45,4 @@ ENV ENVIRONMENT=${ENVIRONMENT} \
 
 # IMPORTANTE: max-instances=1 en Cloud Run — el NotificationBroadcaster usa
 # asyncio.Queue en memoria. Múltiples instancias perderían eventos.
-CMD ["python", "-m", "uvicorn", "slate_notifications.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8001", \
-     "--workers", "1"]
+CMD ["sh", "-c", "python -m uvicorn slate_notifications.main:app --host 0.0.0.0 --port ${PORT:-8001} --workers 1 --forwarded-allow-ips='*'"]

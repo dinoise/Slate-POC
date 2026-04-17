@@ -15,7 +15,22 @@ const vuetify = createVuetify({
     sets: { mdi },
   },
   theme: {
-    defaultTheme: 'light',
+    defaultTheme: 'dark',
+    themes: {
+      dark: {
+        dark: true,
+        colors: {
+          background: '#0f172a',
+          surface: '#1e293b',
+          primary: '#6366f1',
+          secondary: '#22c55e',
+          error: '#ef4444',
+          warning: '#f59e0b',
+          info: '#06b6d4',
+          success: '#22c55e',
+        },
+      },
+    },
   },
 })
 

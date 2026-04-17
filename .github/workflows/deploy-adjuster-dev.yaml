@@ -31,7 +31,8 @@ jobs:
       tag: dev
       environment: dev
       vite-api-base-url: https://slate-api-dev-43634032496.us-central1.run.app
-      vite-google-client-id: PLACEHOLDER_ADJUSTER_CLIENT_ID
+      vite-notifications-url: https://slate-notifications-dev-43634032496.us-central1.run.app
+      vite-google-client-id: 43634032496-8v7hjv5vt6thptt6huacv386kje52rqt.apps.googleusercontent.com
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -52,8 +53,8 @@ jobs:
       min-instances: 0
       max-instances: 2
       timeout: 60s
-      allow-unauthenticated: false
-      enable-iap: true
+      allow-unauthenticated: true
+      enable-iap: false
       skip-health-check: true
       health-check-path: /healthz
     secrets:

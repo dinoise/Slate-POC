@@ -2,21 +2,38 @@
 
 from __future__ import annotations
 
+import os
+
 from pydantic import PostgresDsn
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_ENV = os.getenv("ENVIRONMENT", "development")
+_ENV_FILES: dict[str, tuple[str, ...]] = {
+    "development": (".env",),
+    "test": (".env.test",),
+}
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILES.get(_ENV, ()),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     PROJECT_NAME: str = "slate-notifications"
     VERSION: str = "0.1.0"
     LOG_LEVEL: str = "INFO"
+    ENVIRONMENT: str = "development"
 
     DATABASE_URL: PostgresDsn
 
-    # CORS — allow all origins in dev; restrict in prod via env
-    CORS_ORIGINS: list[str] = ["*"]
+    # Comma-separated origins — "*" allows all in dev
+    CORS_ORIGINS: str = "*"
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
 
 settings = Settings()

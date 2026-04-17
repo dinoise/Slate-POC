@@ -11,9 +11,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@slate/types": "workspace:*",
     "vue": "^3.4.0"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.21",
     "typescript": "^5.4.0"
   }
 }

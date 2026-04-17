@@ -57,6 +57,14 @@ jobs:
       min-instances: 1
       max-instances: 1
       timeout: 3600s
+      runtime-service-account: poc-api@lennken-poc.iam.gserviceaccount.com
+      allow-unauthenticated: true
+      vpc-network: default
+      vpc-subnet: poc-cloudrun-subnet
+      cloudrun-secrets: |
+        DATABASE_URL=poc-database-dev-url:latest
+      cloudrun-env-vars: |
+        CORS_ORIGINS=https://slate-adjuster-dev-43634032496.us-central1.run.app,https://slate-admin-dev-43634032496.us-central1.run.app
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
