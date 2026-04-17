@@ -9,7 +9,7 @@ import logging
 import asyncpg
 from fastapi import FastAPI
 
-from .config import settings
+from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 

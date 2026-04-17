@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useGoogleAuth } from '../composables/useGoogleAuth'
+import { useGoogleAuth } from '@slate/composables'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),

@@ -2055,6 +2055,7 @@ source = { editable = "services/notifications" }
 dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
+    { name = "google-auth", extra = ["requests"] },
     { name = "httpx" },
     { name = "pydantic-settings" },
     { name = "slate-core" },
@@ -2075,6 +2076,7 @@ dev = [
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "google-auth", extras = ["requests"], specifier = ">=2.28.0" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.26.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },

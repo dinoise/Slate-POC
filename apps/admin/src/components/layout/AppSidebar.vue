@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 import Menu from 'primevue/menu'
-import { useGoogleAuth } from '../../composables/useGoogleAuth'
+import { useGoogleAuth } from '@slate/composables'
 
 const route = useRoute() ?? { path: '' }
 const router = useRouter()

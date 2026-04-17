@@ -7,11 +7,12 @@ import json
 import logging
 
 import asyncpg
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
-from ..config import settings
-from ..notifier import broadcaster
+from ..core.auth import verify_google_token
+from ..core.config import settings
+from ..services.broadcaster import broadcaster
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 logger = logging.getLogger(__name__)
@@ -79,7 +80,7 @@ async def _enrich(payload: dict) -> dict:
         return payload
 
 
-@router.get("/stream")
+@router.get("/stream", dependencies=[Depends(verify_google_token)])
 async def notification_stream(
     request: Request,
     adjuster_id: int = Query(..., gt=0, description="Adjuster ID to subscribe to"),

@@ -350,6 +350,9 @@ importers:
 
   packages/composables:
     dependencies:
+      '@slate/api-client':
+        specifier: workspace:*
+        version: link:../api-client
       '@slate/types':
         specifier: workspace:*
         version: link:../types

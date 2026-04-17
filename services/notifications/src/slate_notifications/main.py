@@ -8,9 +8,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import settings
-from .notifier import start_listener, stop_listener
+from .core.config import settings
 from .routes import stream_router
+from .services.broadcaster import start_listener, stop_listener
 
 
 @asynccontextmanager

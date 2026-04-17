@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGoogleAuth } from '../composables/useGoogleAuth'
+import { useGoogleAuth } from '@slate/composables'
 
 const router = useRouter()
 const { user, error, promptSuppressed, initialize, renderButton } = useGoogleAuth()

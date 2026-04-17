@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # Comma-separated origins — "*" allows all in dev
     CORS_ORIGINS: str = "*"
 
+    # Google OAuth — Client ID para verificar tokens de GIS del frontend
+    # Si está vacío, la verificación se omite (útil para tests y dev local)
+    GOOGLE_CLIENT_ID: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

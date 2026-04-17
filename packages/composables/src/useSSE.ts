@@ -1,5 +1,6 @@
 import { ref, onUnmounted, type Ref } from 'vue'
 import type { AssignmentEvent } from '@slate/types'
+import { getAuthToken } from '@slate/api-client'
 
 export interface UseSSEReturn {
   events: Ref<AssignmentEvent[]>
@@ -32,9 +33,12 @@ export function useSSE(adjusterId: Ref<number | null>): UseSSEReturn {
   function connect() {
     if (!adjusterId.value) return
 
-    source = new EventSource(
-      `${notificationsUrl}/notifications/stream?adjuster_id=${adjusterId.value}`,
-    )
+    // EventSource does not support custom headers — pass token as query param.
+    const token = getAuthToken()
+    const params = new URLSearchParams({ adjuster_id: String(adjusterId.value) })
+    if (token) params.set('token', token)
+
+    source = new EventSource(`${notificationsUrl}/notifications/stream?${params}`)
 
     source.addEventListener('connected', () => {
       connected.value = true

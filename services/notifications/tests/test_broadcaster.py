@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from slate_notifications.notifier import NotificationBroadcaster
+from slate_notifications.services.broadcaster import NotificationBroadcaster
 
 
 @pytest.mark.asyncio
