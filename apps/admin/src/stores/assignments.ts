@@ -15,9 +15,10 @@ export const useAssignmentsStore = defineStore('assignments', () => {
     error.value = null
     try {
       const res = await assignmentsApi.list(params)
-      const list = Array.isArray(res) ? res : (res as any).items ?? []
+      type ApiResponse = Assignment[] | { items: Assignment[]; total: number }
+      const list = Array.isArray(res) ? res : (res as ApiResponse & { items: Assignment[] }).items ?? []
       items.value = list
-      total.value = Array.isArray(res) ? list.length : (res as any).total ?? list.length
+      total.value = Array.isArray(res) ? list.length : ((res as { total?: number }).total ?? list.length)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Error al cargar asignaciones'
     } finally {

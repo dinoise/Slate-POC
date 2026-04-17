@@ -16,9 +16,10 @@ export const useAdjustersStore = defineStore('adjusters', () => {
     error.value = null
     try {
       const res = await adjustersApi.list(params)
-      const list = Array.isArray(res) ? res : (res as any).items ?? []
+      type ApiResponse = Adjuster[] | { items: Adjuster[]; total: number }
+      const list = Array.isArray(res) ? res : (res as ApiResponse & { items: Adjuster[] }).items ?? []
       items.value = list
-      total.value = Array.isArray(res) ? list.length : (res as any).total ?? list.length
+      total.value = Array.isArray(res) ? list.length : ((res as { total?: number }).total ?? list.length)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Error al cargar ajustadores'
     } finally {

@@ -16,9 +16,10 @@ export const useIncidentsStore = defineStore('incidents', () => {
     try {
       const res = await incidentsApi.list(params)
       // La API retorna list[] directamente — PaginatedResponse es para futuras versiones
-      const list = Array.isArray(res) ? res : (res as any).items ?? []
+      type ApiResponse = Incident[] | { items: Incident[]; total: number }
+      const list = Array.isArray(res) ? res : (res as ApiResponse & { items: Incident[] }).items ?? []
       items.value = list
-      total.value = Array.isArray(res) ? list.length : (res as any).total ?? list.length
+      total.value = Array.isArray(res) ? list.length : ((res as { total?: number }).total ?? list.length)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Error al cargar incidentes'
     } finally {
