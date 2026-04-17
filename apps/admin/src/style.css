@@ -1,0 +1,20 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: var(--p-font-family, system-ui, sans-serif);
+}
+
+body {
+  background: var(--p-surface-950);
+  color: var(--p-surface-100);
+}
+
+/* Forzar dark mode — el panel operativo siempre es oscuro */
+:root {
+  color-scheme: dark;
+}
