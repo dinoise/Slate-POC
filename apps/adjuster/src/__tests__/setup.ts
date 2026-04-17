@@ -13,14 +13,16 @@ globalThis.ResizeObserver = class ResizeObserver {
 }
 
 // IntersectionObserver — used by some Vuetify scroll/lazy components
-globalThis.IntersectionObserver = class IntersectionObserver {
+globalThis.IntersectionObserver = class {
   observe() {}
   unobserve() {}
   disconnect() {}
   root = null
   rootMargin = ''
   thresholds = []
-}
+  takeRecords() { return [] }
+  scrollMargin = ''
+} as unknown as typeof IntersectionObserver
 
 // CSS.supports — used by Vuetify feature detection
 if (!globalThis.CSS) {
