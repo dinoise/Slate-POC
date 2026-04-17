@@ -164,39 +164,35 @@ jobs:
         run: |
           SERVICE_URL="${{ steps.deploy.outputs.url }}"
           SERVICE_URL="${SERVICE_URL%/}"
+          IAP_CLIENT_ID="${{ inputs.iap-client-id }}"
           echo "🔍 Health check → ${SERVICE_URL}${{ inputs.health-check-path }}"
 
-          # Cuando IAP está activo, el audience debe ser el OAuth2 client ID de IAP,
-          # NO la service URL. IAP valida el JWT audience antes de forwarding al contenedor.
-          # Sin IAP, se usa la service URL como audience (validado por Cloud Run directamente).
-          IAP_CLIENT_ID="${{ inputs.iap-client-id }}"
-          if [ -n "${IAP_CLIENT_ID}" ]; then
-            AUDIENCE="${IAP_CLIENT_ID}"
-            echo "🔐 Modo IAP — audience: ${AUDIENCE}"
-          else
-            AUDIENCE="${SERVICE_URL}"
-            echo "🔓 Sin IAP — audience: ${AUDIENCE}"
-          fi
-
-          # WIF no soporta --audiences directamente — se impersona la SA deployer.
-          # Requiere: roles/iam.serviceAccountTokenCreator en poc-deployer (SA resource)
-          #           roles/run.invoker en el servicio Cloud Run para poc-deployer
-          ID_TOKEN=$(gcloud auth print-identity-token \
-            --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
-            --audiences="${AUDIENCE}" \
-            --include-email)
+          # Si hay IAP client ID, obtener token con ese audience; sino, dejar AUTH_HEADER vacío.
+          # IAP valida aud = resource path; Cloud Run sin IAP valida aud = service URL.
+          # WIF requiere impersonación: roles/iam.serviceAccountTokenCreator en poc-deployer.
+          [ -n "${IAP_CLIENT_ID}" ] \
+            && AUTH_HEADER="Authorization: Bearer $(gcloud auth print-identity-token \
+                --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
+                --audiences="${IAP_CLIENT_ID}" \
+                --include-email)" \
+            && echo "🔐 Modo IAP — audience: ${IAP_CLIENT_ID}" \
+            || echo "🔓 Sin IAP — sin autenticación"
 
           MAX_ATTEMPTS=5
           ATTEMPT=1
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              -H "Authorization: Bearer ${ID_TOKEN}" \
-              "${SERVICE_URL}${{ inputs.health-check-path }}")
+            RESPONSE=$(curl -si \
+              ${AUTH_HEADER:+-H "${AUTH_HEADER}"} \
+              "${SERVICE_URL}${{ inputs.health-check-path }}" 2>&1)
+            HTTP_CODE=$(echo "${RESPONSE}" | grep -m1 "^HTTP" | awk '{print $2}')
             if [ "${HTTP_CODE}" = "200" ]; then
               echo "✅ Health check OK (intento ${ATTEMPT}) — HTTP ${HTTP_CODE}"
               exit 0
             fi
-            echo "⏳ Intento ${ATTEMPT}/${MAX_ATTEMPTS} fallido — HTTP ${HTTP_CODE} — esperando 5s..."
+            echo "⏳ Intento ${ATTEMPT}/${MAX_ATTEMPTS} fallido — HTTP ${HTTP_CODE}"
+            echo "── Response ──"
+            echo "${RESPONSE}"
+            echo "──────────────"
             sleep 5
             ATTEMPT=$((ATTEMPT + 1))
           done
