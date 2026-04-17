@@ -30,10 +30,11 @@ jobs:
       registry: us-central1-docker.pkg.dev
       tag: dev
       environment: dev
+      vite-api-base-url: https://slate-api-dev-43634032496.us-central1.run.app
+      vite-google-client-id: PLACEHOLDER_REPORTER_CLIENT_ID
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      vite-api-base-url: ${{ secrets.VITE_API_BASE_URL_DEV }}
 
   deploy:
     name: "Deploy"
