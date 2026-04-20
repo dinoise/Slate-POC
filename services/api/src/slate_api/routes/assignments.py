@@ -14,6 +14,7 @@ from ..schemas.assignment import (
     OptimizeResponse,
     RouteResponse,
 )
+from ..schemas.pagination import PaginatedResponse
 from ..services.assignment_service import AssignmentService
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
@@ -44,7 +45,7 @@ async def create_assignment(
 
 @router.get(
     "/",
-    response_model=list[AssignmentRead],
+    response_model=PaginatedResponse[AssignmentRead],
     summary="Get all assignments",
 )
 async def get_assignments(
@@ -52,14 +53,20 @@ async def get_assignments(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     status_filter: str | None = Query(None, alias="status"),
-) -> list[AssignmentRead]:
+) -> PaginatedResponse[AssignmentRead]:
     """Get all assignments with optional filtering."""
-    assignments = await service.get_all_assignments(
+    items, total = await service.get_all_assignments(
         skip=skip,
         limit=limit,
         status=status_filter,
     )
-    return [AssignmentRead.model_validate(asgn) for asgn in assignments]
+    page = (skip // limit) + 1 if limit else 1
+    return PaginatedResponse(
+        items=[AssignmentRead.model_validate(asgn) for asgn in items],
+        total=total,
+        page=page,
+        size=limit,
+    )
 
 
 @router.get(

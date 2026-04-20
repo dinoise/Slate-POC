@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query, status
 from ..core import DBSession
 from ..core.provider_registry import ProviderDep
 from ..schemas.incident import IncidentCreate, IncidentRead, IncidentUpdate
+from ..schemas.pagination import PaginatedResponse
 from ..services.incident_service import IncidentService
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
@@ -38,7 +39,7 @@ async def create_incident(
 
 @router.get(
     "/",
-    response_model=list[IncidentRead],
+    response_model=PaginatedResponse[IncidentRead],
     summary="Get all incidents",
 )
 async def get_incidents(
@@ -46,14 +47,20 @@ async def get_incidents(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     status_filter: str | None = Query(None, alias="status"),
-) -> list[IncidentRead]:
+) -> PaginatedResponse[IncidentRead]:
     """Get all incidents with optional filtering."""
-    incidents = await service.get_all_incidents(
+    items, total = await service.get_all_incidents(
         skip=skip,
         limit=limit,
         status=status_filter,
     )
-    return [IncidentRead.model_validate(inc) for inc in incidents]
+    page = (skip // limit) + 1 if limit else 1
+    return PaginatedResponse(
+        items=[IncidentRead.model_validate(inc) for inc in items],
+        total=total,
+        page=page,
+        size=limit,
+    )
 
 
 @router.get(

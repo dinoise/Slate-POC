@@ -1,9 +1,10 @@
 """Pydantic schemas for Incident model."""
 
 from datetime import datetime
-from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
+
+from ..core.enums import IncidentStatus
 
 
 class IncidentBase(BaseModel):
@@ -23,17 +24,6 @@ class IncidentBase(BaseModel):
 class IncidentCreate(IncidentBase):
     """Schema for creating an Incident."""
 
-    @field_validator("latitude", "longitude")
-    @classmethod
-    def validate_coordinates(cls, v: float, info: Any) -> float:
-        """Validate that coordinates are valid."""
-        field_name = info.field_name
-        if field_name == "latitude" and not -90 <= v <= 90:
-            raise ValueError("Latitude must be between -90 and 90")
-        if field_name == "longitude" and not -180 <= v <= 180:
-            raise ValueError("Longitude must be between -180 and 180")
-        return v
-
 
 class IncidentUpdate(BaseModel):
     """Schema for updating an Incident."""
@@ -41,7 +31,7 @@ class IncidentUpdate(BaseModel):
     incident_type: str | None = Field(None, min_length=1, max_length=50)
     severity: int | None = Field(None, ge=1, le=5)
     description: str | None = None
-    status: str | None = Field(None, pattern="^(pending|assigned|in_progress|completed|cancelled)$")
+    status: IncidentStatus | None = None
 
 
 class IncidentRead(IncidentBase):
@@ -50,6 +40,6 @@ class IncidentRead(IncidentBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    status: str
+    status: IncidentStatus
     created_at: datetime
     updated_at: datetime

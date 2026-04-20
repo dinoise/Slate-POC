@@ -61,7 +61,10 @@ async def test_create_incident_with_user(client: AsyncClient, db_session: AsyncS
 async def test_get_incidents_empty(client: AsyncClient) -> None:
     response = await client.get(_BASE + "/")
     assert response.status_code == 200
-    assert response.json() == []
+    data = response.json()
+    assert "items" in data and "total" in data
+    assert data["total"] == 0
+    assert data["items"] == []
 
 
 async def test_get_incidents_with_data(client: AsyncClient, db_session: AsyncSession) -> None:
@@ -69,7 +72,9 @@ async def test_get_incidents_with_data(client: AsyncClient, db_session: AsyncSes
     await create_incident(db_session)
     response = await client.get(_BASE + "/")
     assert response.status_code == 200
-    assert len(response.json()) == 2
+    data = response.json()
+    assert data["total"] >= 2
+    assert len(data["items"]) >= 2
 
 
 async def test_get_incidents_status_filter(client: AsyncClient, db_session: AsyncSession) -> None:
@@ -77,7 +82,7 @@ async def test_get_incidents_status_filter(client: AsyncClient, db_session: Asyn
     await create_incident(db_session, status="cancelled")
     response = await client.get(_BASE + "/", params={"status": "pending"})
     assert response.status_code == 200
-    for inc in response.json():
+    for inc in response.json()["items"]:
         assert inc["status"] == "pending"
 
 

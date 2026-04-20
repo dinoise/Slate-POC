@@ -1,9 +1,10 @@
 """Pydantic schemas for Adjuster model."""
 
 from datetime import datetime
-from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from ..core.enums import AdjusterStatus
 
 
 class AdjusterBase(BaseModel):
@@ -23,17 +24,6 @@ class AdjusterBase(BaseModel):
 class AdjusterCreate(AdjusterBase):
     """Schema for creating an Adjuster."""
 
-    @field_validator("home_latitude", "home_longitude")
-    @classmethod
-    def validate_coordinates(cls, v: float, info: Any) -> float:
-        """Validate that coordinates are valid."""
-        field_name = info.field_name
-        if field_name == "home_latitude" and not -90 <= v <= 90:
-            raise ValueError("Latitude must be between -90 and 90")
-        if field_name == "home_longitude" and not -180 <= v <= 180:
-            raise ValueError("Longitude must be between -180 and 180")
-        return v
-
 
 class AdjusterUpdate(BaseModel):
     """Schema for updating an Adjuster."""
@@ -45,7 +35,7 @@ class AdjusterUpdate(BaseModel):
     skills: list[str] | None = None
     max_cases_per_day: int | None = Field(None, ge=1, le=20)
     is_active: bool | None = None
-    status: str | None = Field(None, pattern="^(available|busy|offline)$")
+    status: AdjusterStatus | None = None
 
 
 class AdjusterRead(AdjusterBase):
@@ -55,7 +45,7 @@ class AdjusterRead(AdjusterBase):
 
     id: int
     is_active: bool
-    status: str
+    status: AdjusterStatus
     created_at: datetime
     updated_at: datetime
     current_latitude: float | None = Field(

@@ -43,7 +43,7 @@ async def get_demand_predictions(
     bbox: str = Query(
         ...,
         description="Bounding box as 'min_lat,min_lon,max_lat,max_lon'",
-        example="19.2,-99.4,19.6,-99.0",
+        examples=["19.2,-99.4,19.6,-99.0"],
     ),
     limit: int = Query(MAX_LIMIT, ge=1, le=MAX_LIMIT),
 ) -> list[DemandPredictionRead]:

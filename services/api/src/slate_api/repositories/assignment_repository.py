@@ -3,6 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.enums import ACTIVE_ASSIGNMENT_STATUSES
 from ..models import Assignment
 from .base_repository import BaseRepository
 
@@ -67,7 +68,7 @@ class AssignmentRepository(BaseRepository[Assignment]):
         """
         query = select(Assignment).where(
             Assignment.adjuster_id == adjuster_id,
-            Assignment.status.in_(["assigned", "accepted", "en_route", "arrived", "in_progress"]),
+            Assignment.status.in_(ACTIVE_ASSIGNMENT_STATUSES),
         )
         result = await self.db.execute(query)
         return list(result.scalars().all())

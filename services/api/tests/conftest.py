@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from slate_api.core.auth import verify_google_token
 from slate_api.core.config import settings
 from slate_api.core.database import get_db
 from slate_api.core.provider_registry import get_active_provider
@@ -86,6 +87,10 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_active_provider] = lambda: mock_provider
+    app.dependency_overrides[verify_google_token] = lambda: {
+        "sub": "test-user",
+        "email": "test@test.com",
+    }
 
     async with AsyncClient(
         transport=ASGITransport(app=app),

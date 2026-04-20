@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from slate_core.geospatial.base import RoutingProvider
 from slate_core.optimization import assignment_solver
 
+from ..core.enums import AdjusterStatus, AssignmentStatus, IncidentStatus
 from ..core.exceptions import NotFoundError, ServiceUnavailableError, ValidationError
 from ..core.logging import get_logger
 from ..models import Assignment
@@ -82,14 +83,14 @@ class AssignmentService:
             adjuster_id=data.adjuster_id,
             assigned_at=data.assigned_at,
             notes=data.notes,
-            status="assigned",
+            status=AssignmentStatus.ASSIGNED,
         )
 
         # Update incident status
-        await self.incident_repository.update(data.incident_id, status="assigned")
+        await self.incident_repository.update(data.incident_id, status=IncidentStatus.ASSIGNED)
 
         # Update adjuster status
-        await self.adjuster_repository.update(data.adjuster_id, status="busy")
+        await self.adjuster_repository.update(data.adjuster_id, status=AdjusterStatus.BUSY)
 
         return assignment
 
@@ -116,9 +117,8 @@ class AssignmentService:
         skip: int = 0,
         limit: int = 100,
         status: str | None = None,
-    ) -> list[Assignment]:
-        """
-        Get all assignments.
+    ) -> tuple[list[Assignment], int]:
+        """Get paginated assignments with total count.
 
         Args:
             skip: Records to skip
@@ -126,11 +126,12 @@ class AssignmentService:
             status: Optional status filter
 
         Returns:
-            List of assignments
+            Tuple of (items, total)
         """
         if status:
-            return await self.repository.get_by_status(status, limit)
-        return await self.repository.get_all(skip=skip, limit=limit)
+            items = await self.repository.get_by_status(status, limit)
+            return items, len(items)
+        return await self.repository.get_all_paginated(skip=skip, limit=limit)
 
     async def update_assignment(
         self,
@@ -163,9 +164,13 @@ class AssignmentService:
             raise NotFoundError(f"Assignment with id {assignment_id} not found")
 
         # When cancelling, release the adjuster and reset the incident to pending
-        if data.status == "cancelled":
-            await self.adjuster_repository.update(assignment.adjuster_id, status="available")
-            await self.incident_repository.update(assignment.incident_id, status="pending")
+        if data.status == AssignmentStatus.CANCELLED:
+            await self.adjuster_repository.update(
+                assignment.adjuster_id, status=AdjusterStatus.AVAILABLE
+            )
+            await self.incident_repository.update(
+                assignment.incident_id, status=IncidentStatus.PENDING
+            )
 
         return updated
 
@@ -347,13 +352,17 @@ class AssignmentService:
                     adjuster_id=adjuster.adjuster_id,
                     assigned_at=datetime.now(),
                     travel_time_minutes=travel_min,
-                    status="assigned",
+                    status=AssignmentStatus.ASSIGNED,
                 )
                 db_id = assignment.id
                 # Mark incident as assigned
-                await self.incident_repository.update(incident.incident_id, status="assigned")
+                await self.incident_repository.update(
+                    incident.incident_id, status=IncidentStatus.ASSIGNED
+                )
                 # Mark adjuster as busy
-                await self.adjuster_repository.update(adjuster.adjuster_id, status="busy")
+                await self.adjuster_repository.update(
+                    adjuster.adjuster_id, status=AdjusterStatus.BUSY
+                )
 
             optimized.append(
                 OptimizedAssignment(

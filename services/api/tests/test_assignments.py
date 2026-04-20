@@ -109,7 +109,10 @@ async def test_get_assignments(client: AsyncClient, db_session: AsyncSession) ->
     await create_assignment(db_session, incident, adjuster)
     response = await client.get(_BASE + "/")
     assert response.status_code == 200
-    assert len(response.json()) >= 1
+    data = response.json()
+    assert "items" in data and "total" in data
+    assert data["total"] >= 1
+    assert len(data["items"]) >= 1
 
 
 # ── Read ──────────────────────────────────────────────────────────────────────

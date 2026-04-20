@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ..core.enums import AssignmentStatus
+
 TrafficSpeed = Literal["NORMAL", "SLOW", "TRAFFIC_JAM"]
 
 
@@ -36,10 +38,7 @@ class AssignmentUpdate(BaseModel):
     estimated_arrival_time: datetime | None = None
     actual_arrival_time: datetime | None = None
     completed_at: datetime | None = None
-    status: str | None = Field(
-        None,
-        pattern="^(assigned|accepted|en_route|arrived|in_progress|completed|cancelled)$",
-    )
+    status: AssignmentStatus | None = None
     notes: str | None = None
 
 
@@ -56,7 +55,7 @@ class AssignmentRead(AssignmentBase):
     distance_km: float | None
     travel_time_minutes: int | None
     optimization_score: float | None
-    status: str
+    status: AssignmentStatus
     created_at: datetime
     updated_at: datetime
 

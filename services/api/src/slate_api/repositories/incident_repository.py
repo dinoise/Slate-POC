@@ -1,5 +1,7 @@
 """Repository for Incident model with geospatial queries."""
 
+from collections.abc import Collection
+
 from geoalchemy2.functions import ST_DWithin, ST_MakePoint, ST_SetSRID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,6 +73,12 @@ class IncidentRepository(BaseRepository[Incident]):
             List of incidents
         """
         query = select(Incident).where(Incident.status == status).limit(limit)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_by_statuses(self, statuses: Collection[str], limit: int = 1000) -> list[Incident]:
+        """Get incidents whose status is in the given collection (single IN query)."""
+        query = select(Incident).where(Incident.status.in_(statuses)).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

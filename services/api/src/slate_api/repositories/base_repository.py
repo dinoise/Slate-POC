@@ -92,9 +92,6 @@ class BaseRepository(Generic[T]):
         Returns:
             Updated model instance or None if not found
         """
-        # Remove None values (but keep False, 0, empty string)
-        data = {k: v for k, v in data.items() if v is not None}
-
         stmt = update(self.model).where(self.model.id == id).values(**data).returning(self.model)
         result = await self.db.execute(stmt)
         await self.db.commit()

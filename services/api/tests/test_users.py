@@ -54,7 +54,10 @@ async def test_create_user_duplicate_email_409(
 async def test_get_users_empty(client: AsyncClient) -> None:
     response = await client.get(_BASE + "/")
     assert response.status_code == 200
-    assert response.json() == []
+    data = response.json()
+    assert "items" in data and "total" in data
+    assert data["total"] == 0
+    assert data["items"] == []
 
 
 async def test_get_users_returns_list(client: AsyncClient, db_session: AsyncSession) -> None:
@@ -62,7 +65,9 @@ async def test_get_users_returns_list(client: AsyncClient, db_session: AsyncSess
     await create_user(db_session)
     response = await client.get(_BASE + "/")
     assert response.status_code == 200
-    assert len(response.json()) == 2
+    data = response.json()
+    assert data["total"] >= 2
+    assert len(data["items"]) >= 2
 
 
 # ── Read ──────────────────────────────────────────────────────────────────────

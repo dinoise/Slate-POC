@@ -3,6 +3,7 @@
 from geoalchemy2.functions import ST_MakePoint
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.enums import BUSY_ADJUSTER_STATUS, AdjusterStatus
 from ..core.exceptions import ConflictError, NotFoundError
 from ..models import Adjuster
 from ..repositories.adjuster_repository import AdjusterRepository
@@ -50,7 +51,7 @@ class AdjusterService:
             skills=data.skills,
             max_cases_per_day=data.max_cases_per_day,
             is_active=True,
-            status="available",
+            status=AdjusterStatus.AVAILABLE,
         )
 
         return adjuster
@@ -131,7 +132,9 @@ class AdjusterService:
             NotFoundError: If adjuster not found
         """
         await self.get_adjuster(adjuster_id)
-        updated = await self.repository.update(adjuster_id, is_active=False, status="offline")
+        updated = await self.repository.update(
+            adjuster_id, is_active=False, status=AdjusterStatus.OFFLINE
+        )
         if not updated:
             raise NotFoundError(f"Adjuster with id {adjuster_id} not found")
         return updated
@@ -192,11 +195,10 @@ class AdjusterService:
         Returns:
             Number of adjusters reset.
         """
-        busy_statuses = ["busy", "en_route", "on_site"]
         reset = 0
-        for s in busy_statuses:
+        for s in BUSY_ADJUSTER_STATUS:
             adjusters = await self.repository.get_all(limit=1000, status=s, is_active=True)
             for adjuster in adjusters:
-                await self.repository.update(adjuster.id, status="available")
+                await self.repository.update(adjuster.id, status=AdjusterStatus.AVAILABLE)
                 reset += 1
         return reset

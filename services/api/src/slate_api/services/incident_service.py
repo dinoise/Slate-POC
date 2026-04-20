@@ -8,6 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from slate_core.geospatial.base import RoutingProvider
 
 from ..core.database import async_session_maker
+from ..core.enums import (
+    ACTIVE_ASSIGNMENT_STATUSES,
+    ACTIVE_INCIDENT_STATUSES,
+    AdjusterStatus,
+    AssignmentStatus,
+    IncidentStatus,
+)
 from ..core.exceptions import ConflictError, NotFoundError, ServiceUnavailableError
 from ..core.logging import get_logger
 from ..models import Incident
@@ -72,7 +79,7 @@ class IncidentService:
             address=data.address,
             incident_datetime=data.incident_datetime,
             reported_by_user_id=data.reported_by_user_id,
-            status="pending",
+            status=IncidentStatus.PENDING,
         )
 
         if provider is not None:
@@ -110,9 +117,8 @@ class IncidentService:
         skip: int = 0,
         limit: int = 100,
         status: str | None = None,
-    ) -> list[Incident]:
-        """
-        Get all incidents with optional filtering.
+    ) -> tuple[list[Incident], int]:
+        """Get paginated incidents with total count.
 
         Args:
             skip: Records to skip
@@ -120,11 +126,12 @@ class IncidentService:
             status: Optional status filter
 
         Returns:
-            List of incidents
+            Tuple of (items, total)
         """
         if status:
-            return await self.repository.get_by_status(status, limit)
-        return await self.repository.get_all(skip=skip, limit=limit)
+            items = await self.repository.get_by_status(status, limit)
+            return items, len(items)
+        return await self.repository.get_all_paginated(skip=skip, limit=limit)
 
     async def update_incident(
         self,
@@ -171,13 +178,16 @@ class IncidentService:
 
         # Release adjuster if there is an active assignment for this incident
         assignments = await self.assignment_repository.get_by_incident(incident_id)
-        active_statuses = {"assigned", "accepted", "en_route", "arrived", "in_progress"}
         for assignment in assignments:
-            if assignment.status in active_statuses:
-                await self.assignment_repository.update(assignment.id, status="cancelled")
-                await self.adjuster_repository.update(assignment.adjuster_id, status="available")
+            if assignment.status in ACTIVE_ASSIGNMENT_STATUSES:
+                await self.assignment_repository.update(
+                    assignment.id, status=AssignmentStatus.CANCELLED
+                )
+                await self.adjuster_repository.update(
+                    assignment.adjuster_id, status=AdjusterStatus.AVAILABLE
+                )
 
-        updated = await self.repository.update(incident_id, status="cancelled")
+        updated = await self.repository.update(incident_id, status=IncidentStatus.CANCELLED)
         if not updated:
             raise NotFoundError(f"Incident with id {incident_id} not found")
         return updated
@@ -188,21 +198,19 @@ class IncidentService:
         Returns:
             Number of incidents cancelled.
         """
-        active_statuses = ["pending", "assigned", "accepted", "en_route", "arrived", "in_progress"]
-        cancelled = 0
-        for status in active_statuses:
-            incidents = await self.repository.get_by_status(status, limit=1000)
-            for incident in incidents:
-                assignments = await self.assignment_repository.get_by_incident(incident.id)
-                for assignment in assignments:
-                    if assignment.status not in ("cancelled", "completed"):
-                        await self.assignment_repository.update(assignment.id, status="cancelled")
-                        await self.adjuster_repository.update(
-                            assignment.adjuster_id, status="available"
-                        )
-                await self.repository.update(incident.id, status="cancelled")
-                cancelled += 1
-        return cancelled
+        incidents = await self.repository.get_by_statuses(ACTIVE_INCIDENT_STATUSES, limit=1000)
+        for incident in incidents:
+            assignments = await self.assignment_repository.get_by_incident(incident.id)
+            for assignment in assignments:
+                if assignment.status in ACTIVE_ASSIGNMENT_STATUSES:
+                    await self.assignment_repository.update(
+                        assignment.id, status=AssignmentStatus.CANCELLED
+                    )
+                    await self.adjuster_repository.update(
+                        assignment.adjuster_id, status=AdjusterStatus.AVAILABLE
+                    )
+            await self.repository.update(incident.id, status=IncidentStatus.CANCELLED)
+        return len(incidents)
 
     async def get_nearby_incidents(
         self,
