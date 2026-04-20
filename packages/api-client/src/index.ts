@@ -53,9 +53,9 @@ export const incidentsApi = {
   },
   get: (id: number) => apiFetch<Incident>(`/api/v1/incidents/${id}`),
   create: (data: Partial<Incident>) =>
-    apiFetch<Incident>('/api/v1/incidents', { method: 'POST', body: JSON.stringify(data) }),
+    apiFetch<Incident>('/api/v1/incidents/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: Partial<Incident>) =>
-    apiFetch<Incident>(`/api/v1/incidents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    apiFetch<Incident>(`/api/v1/incidents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: number) => apiFetch<void>(`/api/v1/incidents/${id}`, { method: 'DELETE' }),
   nearby: (lat: number, lon: number, radiusKm = 10) =>
     apiFetch<Incident[]>(`/api/v1/incidents/nearby/?lat=${lat}&lon=${lon}&radius_km=${radiusKm}`),
@@ -70,7 +70,7 @@ export const adjustersApi = {
   },
   get: (id: number) => apiFetch<Adjuster>(`/api/v1/adjusters/${id}`),
   create: (data: AdjusterCreate) =>
-    apiFetch<Adjuster>('/api/v1/adjusters', { method: 'POST', body: JSON.stringify(data) }),
+    apiFetch<Adjuster>('/api/v1/adjusters/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: Partial<AdjusterCreate>) =>
     apiFetch<Adjuster>(`/api/v1/adjusters/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: number) => apiFetch<void>(`/api/v1/adjusters/${id}`, { method: 'DELETE' }),
@@ -87,7 +87,7 @@ export const assignmentsApi = {
   },
   get: (id: number) => apiFetch<Assignment>(`/api/v1/assignments/${id}`),
   updateStatus: (id: number, status: AssignmentStatus) =>
-    apiFetch<Assignment>(`/api/v1/assignments/${id}/status`, {
+    apiFetch<Assignment>(`/api/v1/assignments/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
@@ -127,7 +127,7 @@ export const demandApi = {
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 export const usersApi = {
-  list: () => apiFetch<User[]>('/api/v1/users'),
+  list: () => apiFetch<PaginatedResponse<User>>('/api/v1/users/'),
   get: (id: number) => apiFetch<User>(`/api/v1/users/${id}`),
   create: (data: Partial<User>) =>
     apiFetch<User>('/api/v1/users', { method: 'POST', body: JSON.stringify(data) }),

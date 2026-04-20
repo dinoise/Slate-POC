@@ -39,5 +39,9 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
+    @property
+    def google_client_ids(self) -> list[str]:
+        return [c.strip() for c in self.GOOGLE_CLIENT_ID.split(",") if c.strip()]
+
 
 settings = Settings()

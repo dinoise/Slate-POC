@@ -1,4 +1,4 @@
-import { ref, onUnmounted, type Ref } from 'vue'
+import { ref, watch, onUnmounted, type Ref } from 'vue'
 import type { AssignmentEvent } from '@slate/types'
 import { getAuthToken } from '@slate/api-client'
 
@@ -14,8 +14,12 @@ export interface UseSSEReturn {
  *
  * Connects to the notifications service stream for a given adjuster.
  * Automatically reconnects on failure with backoff (1s → 2s → 4s … max 60s).
- * The native EventSource does not support backoff — this composable
- * manages reconnection manually to avoid thundering herd on service restarts.
+ * Watches `adjusterId` — when it changes, the old connection is closed and a
+ * new one is opened for the new adjuster. If `adjusterId` becomes null the
+ * stream is disconnected until a new value arrives.
+ *
+ * The native EventSource does not support custom headers — the auth token is
+ * passed as a `?token=` query parameter (handled by the notifications service).
  */
 export function useSSE(adjusterId: Ref<number | null>): UseSSEReturn {
   const events = ref<AssignmentEvent[]>([])
@@ -25,17 +29,38 @@ export function useSSE(adjusterId: Ref<number | null>): UseSSEReturn {
   let source: EventSource | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let backoff = 1000
+  // Track which adjuster the open connection belongs to so reconnect logic
+  // doesn't re-open a stale connection after the adjuster has been swapped out.
+  let connectedFor: number | null = null
 
   const notificationsUrl =
     (import.meta as ImportMeta & { env: { VITE_NOTIFICATIONS_URL?: string } }).env
       .VITE_NOTIFICATIONS_URL ?? ''
 
-  function connect() {
-    if (!adjusterId.value) return
+  function _close() {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    source?.close()
+    source = null
+    connected.value = false
+    connectedFor = null
+  }
 
-    // EventSource does not support custom headers — pass token as query param.
+  function connect() {
+    const id = adjusterId.value
+    if (!id) {
+      _close()
+      return
+    }
+
+    _close()
+    backoff = 1000
+    connectedFor = id
+
     const token = getAuthToken()
-    const params = new URLSearchParams({ adjuster_id: String(adjusterId.value) })
+    const params = new URLSearchParams({ adjuster_id: String(id) })
     if (token) params.set('token', token)
 
     source = new EventSource(`${notificationsUrl}/notifications/stream?${params}`)
@@ -56,6 +81,10 @@ export function useSSE(adjusterId: Ref<number | null>): UseSSEReturn {
     })
 
     source.onerror = () => {
+      // If the adjuster changed while we were waiting for this error, don't
+      // schedule a reconnect for the old adjuster.
+      if (connectedFor !== id) return
+
       connected.value = false
       source?.close()
       source = null
@@ -68,15 +97,16 @@ export function useSSE(adjusterId: Ref<number | null>): UseSSEReturn {
     }
   }
 
-  function disconnect() {
-    if (reconnectTimer) clearTimeout(reconnectTimer)
-    source?.close()
-    source = null
-    connected.value = false
-  }
+  // React to adjuster changes (including null → id and id → different id).
+  watch(adjusterId, (newId) => {
+    if (!newId) {
+      _close()
+      return
+    }
+    connect()
+  }, { immediate: true })
 
-  connect()
-  onUnmounted(disconnect)
+  onUnmounted(_close)
 
-  return { events, connected, error, disconnect }
+  return { events, connected, error, disconnect: _close }
 }

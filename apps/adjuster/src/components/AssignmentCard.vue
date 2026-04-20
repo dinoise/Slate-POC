@@ -20,30 +20,33 @@ const store = useAdjusterSessionStore()
 const updating = computed(() => store.loading)
 
 const STATUS_FLOW: Record<string, { next: Assignment['status']; label: string; color: string; icon: string } | null> = {
-  assigned:   { next: 'accepted',  label: 'Aceptar asignación',    color: 'success', icon: 'mdi-check-circle' },
-  accepted:   { next: 'en_route',  label: 'Iniciar ruta',          color: 'primary', icon: 'mdi-car-arrow-right' },
-  en_route:   { next: 'arrived',   label: 'He llegado',            color: 'warning', icon: 'mdi-map-marker-check' },
-  arrived:    { next: 'completed', label: 'Completar atención',    color: 'info',    icon: 'mdi-clipboard-check' },
-  completed:  null,
-  cancelled:  null,
+  assigned:    { next: 'accepted',    label: 'Aceptar asignación',    color: 'success', icon: 'mdi-check-circle' },
+  accepted:    { next: 'en_route',    label: 'Iniciar ruta',          color: 'primary', icon: 'mdi-car-arrow-right' },
+  en_route:    { next: 'arrived',     label: 'He llegado',            color: 'warning', icon: 'mdi-map-marker-check' },
+  arrived:     { next: 'in_progress', label: 'Iniciar atención',      color: 'purple',  icon: 'mdi-tools' },
+  in_progress: { next: 'completed',   label: 'Completar atención',    color: 'info',    icon: 'mdi-clipboard-check' },
+  completed:   null,
+  cancelled:   null,
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  assigned:  'Asignada',
-  accepted:  'Aceptada',
-  en_route:  'En camino',
-  arrived:   'En sitio',
-  completed: 'Completada',
-  cancelled: 'Cancelada',
+  assigned:    'Asignada',
+  accepted:    'Aceptada',
+  en_route:    'En camino',
+  arrived:     'En sitio',
+  in_progress: 'En atención',
+  completed:   'Completada',
+  cancelled:   'Cancelada',
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  assigned:  'indigo',
-  accepted:  'primary',
-  en_route:  'blue',
-  arrived:   'purple',
-  completed: 'success',
-  cancelled: 'error',
+  assigned:    'indigo',
+  accepted:    'primary',
+  en_route:    'blue',
+  arrived:     'purple',
+  in_progress: 'deep-purple',
+  completed:   'success',
+  cancelled:   'error',
 }
 
 const nextAction = computed(() => STATUS_FLOW[props.assignment.status] ?? null)

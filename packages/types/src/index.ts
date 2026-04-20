@@ -8,15 +8,16 @@ export type IncidentType =
   | 'vandalism'
   | 'other'
 
-export type SeverityLevel = 'low' | 'medium' | 'high' | 'critical'
+export type SeverityLevel = 1 | 2 | 3 | 4 | 5
 
-export type AdjusterStatus = 'available' | 'busy' | 'offline'
+export type AdjusterStatus = 'available' | 'busy' | 'en_route' | 'on_site' | 'offline'
 
 export type AssignmentStatus =
   | 'assigned'
   | 'accepted'
   | 'en_route'
   | 'arrived'
+  | 'in_progress'
   | 'completed'
   | 'cancelled'
 
@@ -77,10 +78,14 @@ export interface Assignment {
   status: AssignmentStatus
   distance_km: number | null
   travel_time_minutes: number | null
+  optimization_score: number | null
   assigned_at: string
-  accepted_at: string | null
+  estimated_arrival_time: string | null
+  actual_arrival_time: string | null
   completed_at: string | null
   notes: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface AdjusterPosition {

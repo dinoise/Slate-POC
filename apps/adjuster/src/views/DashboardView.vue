@@ -220,7 +220,7 @@ const sseBadgeText = computed(() => {
         <!-- Adjuster info chip -->
         <div v-if="store.adjuster" class="px-3 pb-2">
           <v-chip
-            :color="store.adjuster.status === 'available' ? 'success' : store.adjuster.status === 'busy' ? 'warning' : 'grey'"
+            :color="store.adjuster.status === 'available' ? 'success' : ['busy', 'en_route', 'on_site'].includes(store.adjuster.status) ? 'warning' : 'grey'"
             size="small"
             prepend-icon="mdi-account-hard-hat"
             label
