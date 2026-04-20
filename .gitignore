@@ -32,6 +32,9 @@ packages/*/dist/
 !.env.example
 apps/*/.env*
 !apps/*/.env.example
+services/*/.env
+services/*/.env.*
+!services/*/.env.example
 
 # ── Datos y modelos ML ────────────────────────────────────────────────────────
 data/osrm/
