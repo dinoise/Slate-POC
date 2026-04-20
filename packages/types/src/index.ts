@@ -52,6 +52,18 @@ export interface Adjuster {
   updated_at: string
 }
 
+export interface AdjusterCreate {
+  external_id: string
+  first_name: string
+  last_name: string
+  email: string
+  phone?: string
+  home_latitude: number
+  home_longitude: number
+  skills: string[]
+  max_cases_per_day: number
+}
+
 export interface Assignment {
   id: number
   incident_id: number

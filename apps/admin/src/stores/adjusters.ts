@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { adjustersApi } from '@slate/api-client'
-import type { Adjuster } from '@slate/types'
+import type { Adjuster, AdjusterCreate } from '@slate/types'
 
 export const useAdjustersStore = defineStore('adjusters', () => {
   const items = ref<Adjuster[]>([])
@@ -47,5 +47,12 @@ export const useAdjustersStore = defineStore('adjusters', () => {
     }
   }
 
-  return { items, selected, available, loading, error, total, fetchAll, fetchOne, fetchAvailable }
+  async function create(data: AdjusterCreate): Promise<Adjuster> {
+    const adjuster = await adjustersApi.create(data)
+    items.value = [adjuster, ...items.value]
+    total.value += 1
+    return adjuster
+  }
+
+  return { items, selected, available, loading, error, total, fetchAll, fetchOne, fetchAvailable, create }
 })

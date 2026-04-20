@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useToast } from 'primevue/usetoast'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Badge from 'primevue/badge'
@@ -9,10 +10,18 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
 import EmptyState from '../components/EmptyState.vue'
+import AdjusterFormDialog from '../components/AdjusterFormDialog.vue'
 import { useAdjustersStore } from '../stores/adjusters'
 
 const router = useRouter()
+const toast = useToast()
 const store = useAdjustersStore()
+
+const showCreateDialog = ref(false)
+
+function onAdjusterCreated() {
+  toast.add({ severity: 'success', summary: 'Ajustador creado', life: 3000 })
+}
 
 const filters = ref({
   global: { value: null, matchMode: 'contains' },
@@ -50,7 +59,19 @@ onMounted(() => store.fetchAll())
     <div class="view-header">
       <h1 class="view-title">Ajustadores</h1>
       <span class="view-subtitle">{{ store.total }} registros</span>
+      <Button
+        label="Nuevo ajustador"
+        icon="pi pi-plus"
+        size="small"
+        class="ml-auto"
+        @click="showCreateDialog = true"
+      />
     </div>
+
+    <AdjusterFormDialog
+      v-model="showCreateDialog"
+      @created="onAdjusterCreated"
+    />
 
     <DataTable
       :value="store.items"

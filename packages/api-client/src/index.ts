@@ -1,6 +1,7 @@
 import type {
   Incident,
   Adjuster,
+  AdjusterCreate,
   Assignment,
   AdjusterPosition,
   DemandPrediction,
@@ -68,10 +69,10 @@ export const adjustersApi = {
     return apiFetch<PaginatedResponse<Adjuster>>(`/api/v1/adjusters${qs}`)
   },
   get: (id: number) => apiFetch<Adjuster>(`/api/v1/adjusters/${id}`),
-  create: (data: Partial<Adjuster>) =>
+  create: (data: AdjusterCreate) =>
     apiFetch<Adjuster>('/api/v1/adjusters', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<Adjuster>) =>
-    apiFetch<Adjuster>(`/api/v1/adjusters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<AdjusterCreate>) =>
+    apiFetch<Adjuster>(`/api/v1/adjusters/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: number) => apiFetch<void>(`/api/v1/adjusters/${id}`, { method: 'DELETE' }),
   available: () => apiFetch<Adjuster[]>('/api/v1/adjusters/available'),
   resetStatus: () => apiFetch<void>('/api/v1/adjusters/reset-status', { method: 'POST' }),

@@ -22,6 +22,8 @@
     "@slate/api-client": "workspace:*",
     "@slate/composables": "workspace:*",
     "@slate/types": "workspace:*",
+    "@types/leaflet": "^1.9.21",
+    "leaflet": "^1.9.4",
     "pinia": "^3.0.4",
     "primeicons": "^7.0.0",
     "primevue": "^4.5.5",
