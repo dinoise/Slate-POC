@@ -54,7 +54,10 @@ async def test_get_adjusters(client: AsyncClient, db_session: AsyncSession) -> N
     await create_adjuster(db_session)
     response = await client.get(_BASE + "/")
     assert response.status_code == 200
-    assert len(response.json()) >= 2
+    data = response.json()
+    assert "items" in data and "total" in data
+    assert data["total"] >= 2
+    assert len(data["items"]) >= 2
 
 
 async def test_get_adjusters_is_active_filter(
@@ -66,9 +69,9 @@ async def test_get_adjusters_is_active_filter(
     inactive = await client.get(_BASE + "/", params={"is_active": "false"})
     assert active.status_code == 200
     assert inactive.status_code == 200
-    for adj in active.json():
+    for adj in active.json()["items"]:
         assert adj["is_active"] is True
-    for adj in inactive.json():
+    for adj in inactive.json()["items"]:
         assert adj["is_active"] is False
 
 

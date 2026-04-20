@@ -78,7 +78,7 @@ onMounted(() => store.fetchAll())
       :loading="store.loading"
       v-model:filters="filters"
       filter-display="row"
-      :global-filter-fields="['name', 'email', 'phone']"
+      :global-filter-fields="['first_name', 'last_name', 'email', 'phone']"
       row-hover
       paginator
       :rows="20"
@@ -114,7 +114,9 @@ onMounted(() => store.fetchAll())
 
       <Column field="id" header="ID" style="width: 70px" sortable />
 
-      <Column field="name" header="Nombre" sortable />
+      <Column header="Nombre" sortable sort-field="first_name">
+        <template #body="{ data }">{{ data.first_name }} {{ data.last_name }}</template>
+      </Column>
 
       <Column field="email" header="Email" />
 
@@ -144,24 +146,24 @@ onMounted(() => store.fetchAll())
         <template #body="{ data }">
           <div class="tags-row">
             <Tag
-              v-for="spec in data.specializations"
-              :key="spec"
-              :value="spec"
+              v-for="skill in data.skills"
+              :key="skill"
+              :value="skill"
               severity="secondary"
               class="spec-tag"
             />
-            <span v-if="!data.specializations?.length" class="no-specs">—</span>
+            <span v-if="!data.skills?.length" class="no-specs">—</span>
           </div>
         </template>
       </Column>
 
       <Column header="Ubicación" style="width: 120px">
         <template #body="{ data }">
-          <span v-if="data.latitude && data.longitude" class="location-badge">
+          <span v-if="data.current_latitude && data.current_longitude" class="location-badge">
             <span class="pi pi-map-marker" />
             Activa
           </span>
-          <span v-else class="no-specs">Sin ubicación</span>
+          <span v-else class="no-specs">Base</span>
         </template>
       </Column>
 

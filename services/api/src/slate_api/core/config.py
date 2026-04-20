@@ -68,8 +68,15 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = ""
 
-    # Google OAuth — Client ID para verificar tokens de GIS del frontend
+    # Google OAuth — Client IDs CSV (admin, adjuster, reporter, ...)
+    # Acepta uno o varios separados por coma. El token es válido si su
+    # audience coincide con cualquiera de ellos.
     GOOGLE_CLIENT_ID: str = ""
+
+    @property
+    def google_client_ids(self) -> list[str]:
+        """Lista de OAuth client IDs permitidos."""
+        return [c.strip() for c in self.GOOGLE_CLIENT_ID.split(",") if c.strip()]
 
     # Logging
     LOG_LEVEL: str = ""

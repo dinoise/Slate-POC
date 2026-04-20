@@ -45,13 +45,13 @@ const statusLabel: Record<string, string> = {
 const filtered = computed(() => {
   let list = adjustersStore.items
   if (filterStatus.value) list = list.filter((a) => a.status === filterStatus.value)
-  if (filterLocation.value === 'with') list = list.filter((a) => a.latitude && a.longitude)
-  if (filterLocation.value === 'without') list = list.filter((a) => !a.latitude || !a.longitude)
+  if (filterLocation.value === 'with') list = list.filter((a) => a.current_latitude && a.current_longitude)
+  if (filterLocation.value === 'without') list = list.filter((a) => !a.current_latitude || !a.current_longitude)
   return list
 })
 
 const withLocationCount = computed(() =>
-  adjustersStore.items.filter((a) => a.latitude && a.longitude).length,
+  adjustersStore.items.filter((a) => a.current_latitude && a.current_longitude).length,
 )
 
 onMounted(() => {
@@ -159,22 +159,22 @@ onMounted(() => {
             <template #body="{ data }">
               <div class="tags-row">
                 <Tag
-                  v-for="spec in (data.specializations ?? []).slice(0, 3)"
-                  :key="spec"
-                  :value="spec"
+                  v-for="skill in (data.skills ?? []).slice(0, 3)"
+                  :key="skill"
+                  :value="skill"
                   severity="secondary"
                   style="font-size: 0.7rem"
                 />
-                <span v-if="!data.specializations?.length" class="muted">—</span>
+                <span v-if="!data.skills?.length" class="muted">—</span>
               </div>
             </template>
           </Column>
 
           <Column header="Última ubicación" style="min-width: 200px">
             <template #body="{ data }">
-              <span v-if="data.latitude && data.longitude" class="location-cell">
+              <span v-if="data.current_latitude && data.current_longitude" class="location-cell">
                 <span class="pi pi-map-marker location-icon" />
-                {{ data.latitude.toFixed(4) }}, {{ data.longitude.toFixed(4) }}
+                {{ data.current_latitude.toFixed(4) }}, {{ data.current_longitude.toFixed(4) }}
               </span>
               <span v-else class="muted">Sin ubicación</span>
             </template>

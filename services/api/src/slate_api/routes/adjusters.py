@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from ..core import DBSession
 from ..schemas.adjuster import AdjusterCreate, AdjusterRead, AdjusterUpdate
+from ..schemas.pagination import PaginatedResponse
 from ..services.adjuster_service import AdjusterService
 
 router = APIRouter(prefix="/adjusters", tags=["adjusters"])
@@ -36,7 +37,7 @@ async def create_adjuster(
 
 @router.get(
     "/",
-    response_model=list[AdjusterRead],
+    response_model=PaginatedResponse[AdjusterRead],
     summary="Get all adjusters",
 )
 async def get_adjusters(
@@ -44,10 +45,16 @@ async def get_adjusters(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     is_active: bool | None = Query(None),
-) -> list[AdjusterRead]:
+) -> PaginatedResponse[AdjusterRead]:
     """Get all adjusters, optionally filtered by active status."""
-    adjusters = await service.get_all_adjusters(skip=skip, limit=limit, is_active=is_active)
-    return [AdjusterRead.model_validate(adj) for adj in adjusters]
+    items, total = await service.get_all_adjusters(skip=skip, limit=limit, is_active=is_active)
+    page = (skip // limit) + 1 if limit else 1
+    return PaginatedResponse(
+        items=[AdjusterRead.model_validate(adj) for adj in items],
+        total=total,
+        page=page,
+        size=limit,
+    )
 
 
 @router.get(

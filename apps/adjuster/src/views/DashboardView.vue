@@ -86,11 +86,13 @@ watch(
   (adj) => {
     clearMap()
     if (!adj || !map) return
-    if (adj.latitude && adj.longitude) {
-      adjusterMarker = L.marker([adj.latitude, adj.longitude], { icon: adjIcon })
-        .bindTooltip(adj.name, { permanent: false })
+    const adjLat = adj.current_latitude ?? adj.home_latitude
+    const adjLon = adj.current_longitude ?? adj.home_longitude
+    if (adjLat && adjLon) {
+      adjusterMarker = L.marker([adjLat, adjLon], { icon: adjIcon })
+        .bindTooltip(`${adj.first_name} ${adj.last_name}`, { permanent: false })
         .addTo(map)
-      map.setView([adj.latitude, adj.longitude], 13)
+      map.setView([adjLat, adjLon], 13)
     }
   },
 )
@@ -128,8 +130,10 @@ watch(
       .addTo(map)
 
     // Draw route
-    if (adj.latitude && adj.longitude) {
-      await drawRoute(adj.latitude, adj.longitude, lat, lon)
+    const adjLat = adj.current_latitude ?? adj.home_latitude
+    const adjLon = adj.current_longitude ?? adj.home_longitude
+    if (adjLat && adjLon) {
+      await drawRoute(adjLat, adjLon, lat, lon)
     }
   },
 )
@@ -163,8 +167,10 @@ watch(events, async (evts) => {
       .bindTooltip(ev.incident_type ?? 'Siniestro')
       .addTo(map)
 
-    if (adj?.latitude && adj?.longitude) {
-      await drawRoute(adj.latitude, adj.longitude, ev.latitude, ev.longitude)
+    const adjLat = adj?.current_latitude ?? adj?.home_latitude
+    const adjLon = adj?.current_longitude ?? adj?.home_longitude
+    if (adjLat && adjLon) {
+      await drawRoute(adjLat, adjLon, ev.latitude, ev.longitude)
     }
   }
 
@@ -219,7 +225,7 @@ const sseBadgeText = computed(() => {
             prepend-icon="mdi-account-hard-hat"
             label
           >
-            {{ store.adjuster.name }}
+            {{ store.adjuster.first_name }} {{ store.adjuster.last_name }}
           </v-chip>
         </div>
 

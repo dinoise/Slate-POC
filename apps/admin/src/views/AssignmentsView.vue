@@ -72,12 +72,17 @@ const filtered = computed(() => {
         String(a.incident_id).includes(q) ||
         String(a.adjuster_id).includes(q) ||
         incident?.address?.toLowerCase().includes(q) ||
-        adjuster?.name?.toLowerCase().includes(q)
+        `${adjuster?.first_name ?? ''} ${adjuster?.last_name ?? ''}`.toLowerCase().includes(q)
       )
     })
   }
   return list
 })
+
+function adjusterName(id: number): string {
+  const a = adjusterMap.value[id]
+  return a ? `${a.first_name} ${a.last_name}` : `#${id}`
+}
 
 onMounted(() => {
   assignmentsStore.fetchAll()
@@ -153,7 +158,7 @@ onMounted(() => {
       <Column field="adjuster_id" header="Ajustador" style="width: 160px" sortable>
         <template #body="{ data }">
           <Button
-            :label="adjusterMap[data.adjuster_id]?.name ?? `#${data.adjuster_id}`"
+            :label="adjusterName(data.adjuster_id)"
             severity="secondary"
             size="small"
             text

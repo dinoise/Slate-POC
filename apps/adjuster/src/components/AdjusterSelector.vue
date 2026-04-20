@@ -30,7 +30,7 @@ async function onSelect(id: number | null) {
 
 function adjusterLabel(a: Adjuster) {
   const statusEmoji = a.status === 'available' ? '🟢' : a.status === 'busy' ? '🟡' : '⚫'
-  return `${statusEmoji} ${a.name}`
+  return `${statusEmoji} ${a.first_name} ${a.last_name}`
 }
 </script>
 

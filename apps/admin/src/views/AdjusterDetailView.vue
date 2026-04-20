@@ -91,7 +91,7 @@ onMounted(async () => {
           <span class="pi pi-user avatar-icon" />
         </div>
         <div>
-          <h1 class="detail-title">{{ adjuster.name }}</h1>
+          <h1 class="detail-title">{{ adjuster.first_name }} {{ adjuster.last_name }}</h1>
           <p class="detail-subtitle">{{ adjuster.email }}</p>
         </div>
         <Badge
@@ -116,20 +116,23 @@ onMounted(async () => {
                 <dd>
                   <div class="tags-row">
                     <Tag
-                      v-for="spec in adjuster.specializations"
-                      :key="spec"
-                      :value="spec"
+                      v-for="skill in adjuster.skills"
+                      :key="skill"
+                      :value="skill"
                       severity="secondary"
                     />
-                    <span v-if="!adjuster.specializations?.length" class="muted">Sin especialidades</span>
+                    <span v-if="!adjuster.skills?.length" class="muted">Sin especialidades</span>
                   </div>
                 </dd>
               </div>
               <div class="info-row">
                 <dt>Última posición</dt>
                 <dd>
-                  <span v-if="adjuster.latitude && adjuster.longitude">
-                    {{ adjuster.latitude.toFixed(5) }}, {{ adjuster.longitude.toFixed(5) }}
+                  <span v-if="adjuster.current_latitude && adjuster.current_longitude">
+                    {{ adjuster.current_latitude.toFixed(5) }}, {{ adjuster.current_longitude.toFixed(5) }}
+                  </span>
+                  <span v-else-if="adjuster.home_latitude && adjuster.home_longitude" class="muted">
+                    Base: {{ adjuster.home_latitude.toFixed(5) }}, {{ adjuster.home_longitude.toFixed(5) }}
                   </span>
                   <span v-else class="muted">Sin ubicación registrada</span>
                 </dd>

@@ -78,22 +78,18 @@ class AdjusterService:
         skip: int = 0,
         limit: int = 100,
         is_active: bool | None = None,
-    ) -> list[Adjuster]:
+    ) -> tuple[list[Adjuster], int]:
         """
-        Get all adjusters.
-
-        Args:
-            skip: Records to skip
-            limit: Maximum records
-            is_active: Optional filter by active status
+        Get paginated adjusters with total count.
 
         Returns:
-            List of adjusters
+            Tuple of (items, total)
         """
         filters = {}
         if is_active is not None:
             filters["is_active"] = is_active
-        return await self.repository.get_all(skip=skip, limit=limit, **filters)
+        items, total = await self.repository.get_all_paginated(skip=skip, limit=limit, **filters)
+        return items, total
 
     async def update_adjuster(
         self,

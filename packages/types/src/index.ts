@@ -41,13 +41,19 @@ export interface Incident {
 
 export interface Adjuster {
   id: number
-  name: string
+  external_id: string
+  first_name: string
+  last_name: string
   email: string
-  phone: string
+  phone: string | null
+  home_latitude: number
+  home_longitude: number
+  skills: string[]
+  max_cases_per_day: number
+  is_active: boolean
   status: AdjusterStatus
-  specializations: IncidentType[]
-  latitude: number | null
-  longitude: number | null
+  current_latitude: number | null
+  current_longitude: number | null
   created_at: string
   updated_at: string
 }

@@ -2,7 +2,7 @@
 
 from typing import Any, Generic, TypeVar
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.base import Base
@@ -114,6 +114,35 @@ class BaseRepository(Generic[T]):
         result = await self.db.execute(stmt)
         await self.db.commit()
         return result.rowcount > 0
+
+    async def get_all_paginated(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        **filters: Any,
+    ) -> tuple[list[T], int]:
+        """Get records with pagination and total count in a single round-trip."""
+        count_query = select(func.count()).select_from(self.model)
+        items_query = select(self.model)
+
+        for key, value in filters.items():
+            if hasattr(self.model, key):
+                condition = getattr(self.model, key) == value
+                count_query = count_query.where(condition)
+                items_query = items_query.where(condition)
+
+        total = (await self.db.execute(count_query)).scalar_one()
+        items = list((await self.db.execute(items_query.offset(skip).limit(limit))).scalars().all())
+        return items, total
+
+    async def count(self, **filters: Any) -> int:
+        """Count records matching optional filters."""
+        query = select(func.count()).select_from(self.model)
+        for key, value in filters.items():
+            if hasattr(self.model, key):
+                query = query.where(getattr(self.model, key) == value)
+        result = await self.db.execute(query)
+        return result.scalar_one()
 
     async def exists(self, id: int) -> bool:
         """
