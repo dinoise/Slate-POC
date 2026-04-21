@@ -65,8 +65,7 @@ jobs:
       cloudrun-secrets: |
         DATABASE_URL=poc-database-dev-url:latest
         GOOGLE_CLIENT_ID=poc-api-dev-google-client-id:latest
-      cloudrun-env-vars: |
-        CORS_ORIGINS=https://slate-admin-dev-43634032496.us-central1.run.app,https://slate-adjuster-dev-43634032496.us-central1.run.app
+        CORS_ORIGINS=poc-api-dev-cors-origins:latest
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
