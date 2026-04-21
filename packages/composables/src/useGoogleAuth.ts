@@ -39,6 +39,8 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 // true cuando One Tap fue suprimido — LoginView muestra el botón explícito
 const promptSuppressed = ref(false)
+// Guard: initialize() must only run once per page load
+let _initialized = false
 
 function parseJwt(token: string): DecodedToken {
   const part = token.split('.')[1]
@@ -75,6 +77,9 @@ function handleCredentialResponse(response: GoogleCredentialResponse) {
 
 export function useGoogleAuth() {
   function initialize() {
+    if (_initialized) return
+    _initialized = true
+
     const clientId = (import.meta as ImportMeta & { env: { VITE_GOOGLE_CLIENT_ID: string } })
       .env.VITE_GOOGLE_CLIENT_ID
 

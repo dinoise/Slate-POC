@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGoogleAuth } from '@slate/composables'
 
 const router = useRouter()
-const { user, error, promptSuppressed, initialize, renderButton } = useGoogleAuth()
+const { user, error, promptSuppressed, renderButton } = useGoogleAuth()
 
 const buttonContainer = ref<HTMLElement | null>(null)
 
@@ -17,10 +17,6 @@ watch(promptSuppressed, (suppressed) => {
 watch(user, (u) => {
   if (u) router.push('/')
 }, { immediate: true })
-
-onMounted(() => {
-  initialize()
-})
 </script>
 
 <template>
