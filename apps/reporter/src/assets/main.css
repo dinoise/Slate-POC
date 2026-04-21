@@ -1,2 +1,14 @@
 @import "tailwindcss";
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: dark --default;
+}
+
+/* Ensure Leaflet stays below DaisyUI modals */
+.leaflet-pane,
+.leaflet-control {
+  z-index: 400;
+}
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 400;
+}

@@ -2,6 +2,7 @@ import type {
   Incident,
   Adjuster,
   AdjusterCreate,
+  AdjusterUpdate,
   Assignment,
   AssignmentStatusHistory,
   AdjusterPosition,
@@ -72,7 +73,7 @@ export const adjustersApi = {
   get: (id: number) => apiFetch<Adjuster>(`/api/v1/adjusters/${id}`),
   create: (data: AdjusterCreate) =>
     apiFetch<Adjuster>('/api/v1/adjusters/', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<AdjusterCreate>) =>
+  update: (id: number, data: AdjusterUpdate) =>
     apiFetch<Adjuster>(`/api/v1/adjusters/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: number) => apiFetch<void>(`/api/v1/adjusters/${id}`, { method: 'DELETE' }),
   available: () => apiFetch<Adjuster[]>('/api/v1/adjusters/available'),
@@ -98,6 +99,11 @@ export const assignmentsApi = {
     apiFetch<Assignment[]>(`/api/v1/assignments/by-adjuster/${adjusterId}`),
   history: (id: number) =>
     apiFetch<AssignmentStatusHistory[]>(`/api/v1/assignments/${id}/history`),
+  optimize: (data: { use_db?: boolean; incidents?: unknown[]; adjusters?: unknown[] } = { use_db: true }) =>
+    apiFetch<unknown>('/api/v1/assignments/optimize', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 }
 
 // ── Adjuster Positions ────────────────────────────────────────────────────────

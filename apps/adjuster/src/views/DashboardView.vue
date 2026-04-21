@@ -10,6 +10,7 @@ import AdjusterSelector from '@/components/AdjusterSelector.vue'
 import AssignmentCard from '@/components/AssignmentCard.vue'
 import NewAssignmentBanner from '@/components/NewAssignmentBanner.vue'
 import type { AssignmentEvent } from '@slate/types'
+import { AssignmentStatus } from '@slate/types'
 
 const store = useAdjusterSessionStore()
 const { buildRouteLayer, removeRouteLayer, fetchRoute, routeFromPayload } = useRoute()
@@ -191,6 +192,33 @@ watch(events, async (evts) => {
   }
 })
 
+// ── Completion snackbar ───────────────────────────────────────────────────────
+const completionSnack = ref<{ visible: boolean; text: string; color: string }>({
+  visible: false, text: '', color: 'success',
+})
+
+watch(
+  () => store.activeAssignment,
+  (newVal, oldVal) => {
+    if (!oldVal) return
+    // Assignment just became null — came from a terminal transition
+    if (newVal === null) {
+      const wasCompleted = oldVal.status === AssignmentStatus.COMPLETED
+      completionSnack.value = {
+        visible: true,
+        text: wasCompleted ? '✔ Atención completada. Ajustador disponible.' : '✖ Asignación cancelada.',
+        color: wasCompleted ? 'success' : 'warning',
+      }
+      // Clear only incident marker and route — adjuster marker stays at their position
+      if (map) {
+        if (incidentMarker) { map.removeLayer(incidentMarker); incidentMarker = null }
+        if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+      }
+      incidentMeta.value = { type: null, address: null, lat: null, lon: null, severity: null }
+    }
+  },
+)
+
 // SSE badge color
 const sseBadgeColor = computed(() => {
   if (!store.adjuster) return 'grey'
@@ -299,6 +327,20 @@ const sseBadgeText = computed(() => {
 
   <!-- SSE new assignment banner -->
   <NewAssignmentBanner :event="latestEvent" />
+
+  <!-- Completion / cancellation snackbar -->
+  <v-snackbar
+    v-model="completionSnack.visible"
+    location="top"
+    :color="completionSnack.color"
+    timeout="5000"
+    rounded="lg"
+  >
+    {{ completionSnack.text }}
+    <template #actions>
+      <v-btn variant="text" size="small" @click="completionSnack.visible = false">Cerrar</v-btn>
+    </template>
+  </v-snackbar>
 </template>
 
 <style scoped>

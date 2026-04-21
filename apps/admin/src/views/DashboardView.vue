@@ -17,7 +17,7 @@ const adjustersStore = useAdjustersStore()
 const assignmentsStore = useAssignmentsStore()
 
 const activeIncidents = computed(() =>
-  incidentsStore.items.filter((i) => i.status !== 'resolved').length,
+  incidentsStore.items.filter((i) => i.status !== 'completed' && i.status !== 'cancelled').length,
 )
 const availableAdjusters = computed(() =>
   adjustersStore.items.filter((a) => a.status === 'available').length,
@@ -40,9 +40,11 @@ const severityMap: Record<string, string> = {
 }
 
 const statusMap: Record<string, string> = {
-  open: 'danger',
+  pending:     'warn',
+  assigned:    'info',
   in_progress: 'warn',
-  resolved: 'success',
+  completed:   'success',
+  cancelled:   'danger',
 }
 
 onMounted(() => {

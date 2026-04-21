@@ -163,13 +163,24 @@ class AssignmentService:
         if not updated:
             raise NotFoundError(f"Assignment with id {assignment_id} not found")
 
-        # When cancelling, release the adjuster and reset the incident to pending
+        # Side-effects on terminal status transitions
         if data.status == AssignmentStatus.CANCELLED:
             await self.adjuster_repository.update(
                 assignment.adjuster_id, status=AdjusterStatus.AVAILABLE
             )
+            # Only reset incident to pending if it hasn't been cancelled by the reporter
+            incident = await self.incident_repository.get_by_id(assignment.incident_id)
+            if incident and incident.status != IncidentStatus.CANCELLED:
+                await self.incident_repository.update(
+                    assignment.incident_id, status=IncidentStatus.PENDING
+                )
+
+        elif data.status == AssignmentStatus.COMPLETED:
+            await self.adjuster_repository.update(
+                assignment.adjuster_id, status=AdjusterStatus.AVAILABLE
+            )
             await self.incident_repository.update(
-                assignment.incident_id, status=IncidentStatus.PENDING
+                assignment.incident_id, status=IncidentStatus.COMPLETED
             )
 
         return updated

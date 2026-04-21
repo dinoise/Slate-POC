@@ -1,41 +1,40 @@
-// ── Enums ─────────────────────────────────────────────────────────────────────
-
-export type IncidentType =
-  | 'collision'
-  | 'theft'
-  | 'fire'
-  | 'flood'
-  | 'vandalism'
-  | 'other'
-
-export type SeverityLevel = 1 | 2 | 3 | 4 | 5
-
-export type AdjusterStatus = 'available' | 'busy' | 'en_route' | 'on_site' | 'offline'
-
-export type AssignmentStatus =
-  | 'assigned'
-  | 'accepted'
-  | 'en_route'
-  | 'arrived'
-  | 'in_progress'
-  | 'completed'
-  | 'cancelled'
-
-export type RouteProvider = 'osrm' | 'valhalla' | 'google'
+// ── Enums (re-exported from enums.ts) ────────────────────────────────────────
+export {
+  IncidentType,
+  IncidentStatus,
+  AssignmentStatus,
+  AdjusterStatus,
+  RouteProvider,
+  ACTIVE_INCIDENT_STATUSES,
+  ACTIVE_ASSIGNMENT_STATUSES,
+  TERMINAL_ASSIGNMENT_STATUSES,
+  BUSY_ADJUSTER_STATUSES,
+} from './enums'
+export type { SeverityLevel } from './enums'
 
 // ── Models ────────────────────────────────────────────────────────────────────
 
+import type {
+  IncidentType,
+  IncidentStatus,
+  AssignmentStatus,
+  AdjusterStatus,
+  SeverityLevel,
+  RouteProvider,
+} from './enums'
+
 export interface Incident {
   id: number
+  external_id: string
   incident_type: IncidentType
   severity: SeverityLevel
-  description: string
-  address: string
+  description: string | null
+  address: string | null
   latitude: number
   longitude: number
-  status: string
-  reporter_name: string
-  reporter_email: string
+  incident_datetime: string
+  reported_by_user_id: number | null
+  status: IncidentStatus
   created_at: string
   updated_at: string
 }
@@ -69,6 +68,17 @@ export interface AdjusterCreate {
   home_longitude: number
   skills: string[]
   max_cases_per_day: number
+}
+
+export interface AdjusterUpdate {
+  first_name?: string
+  last_name?: string
+  email?: string
+  phone?: string
+  skills?: string[]
+  max_cases_per_day?: number
+  is_active?: boolean
+  status?: AdjusterStatus
 }
 
 export interface Assignment {

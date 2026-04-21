@@ -113,12 +113,8 @@ onMounted(async () => {
                 <dd>{{ incident.description || '—' }}</dd>
               </div>
               <div class="info-row">
-                <dt>Reportante</dt>
-                <dd>{{ incident.reporter_name }}</dd>
-              </div>
-              <div class="info-row">
-                <dt>Email</dt>
-                <dd>{{ incident.reporter_email }}</dd>
+                <dt>Usuario</dt>
+                <dd>{{ incident.reported_by_user_id ?? '—' }}</dd>
               </div>
               <div class="info-row">
                 <dt>Coordenadas</dt>

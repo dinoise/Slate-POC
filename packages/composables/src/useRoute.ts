@@ -7,6 +7,7 @@
  */
 
 import type * as L from 'leaflet'
+import { getAuthToken } from '@slate/api-client'
 // leaflet is a peer dependency — loaded by the consuming app at runtime
 
 
@@ -139,7 +140,10 @@ async function fetchRoute(
     destination_lat: String(destLat),
     destination_lon: String(destLon),
   })
-  const res = await fetch(`${baseUrl}/api/v1/assignments/route?${params}`)
+  const headers: Record<string, string> = {}
+  const token = getAuthToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(`${baseUrl}/api/v1/assignments/route?${params}`, { headers })
   if (!res.ok) throw new Error(`Route API ${res.status}`)
 
   const data = await res.json()

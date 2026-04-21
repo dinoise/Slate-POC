@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { adjustersApi, assignmentsApi } from '@slate/api-client'
 import type { Adjuster, Assignment } from '@slate/types'
+import { AdjusterStatus, ACTIVE_ASSIGNMENT_STATUSES, TERMINAL_ASSIGNMENT_STATUSES } from '@slate/types'
 
 export const useAdjusterSessionStore = defineStore('adjusterSession', () => {
   const adjuster = ref<Adjuster | null>(null)
@@ -29,10 +30,9 @@ export const useAdjusterSessionStore = defineStore('adjusterSession', () => {
   }
 
   async function loadActiveAssignment(id: number) {
-    const ACTIVE = new Set(['assigned', 'accepted', 'en_route', 'arrived', 'in_progress'])
     try {
       const assignments = await assignmentsApi.byAdjuster(id)
-      const active = assignments.find((a) => ACTIVE.has(a.status))
+      const active = assignments.find((a) => ACTIVE_ASSIGNMENT_STATUSES.has(a.status))
       activeAssignment.value = active ?? null
     } catch {
       // No active assignment — silently ignore
@@ -46,8 +46,17 @@ export const useAdjusterSessionStore = defineStore('adjusterSession', () => {
   ) {
     const updated = await assignmentsApi.updateStatus(assignmentId, status)
     activeAssignment.value = updated
-    // If terminal status, clear active assignment
-    if (status === 'completed' || status === 'cancelled') {
+
+    if (TERMINAL_ASSIGNMENT_STATUSES.has(status)) {
+      // Mark adjuster available again before clearing UI
+      if (adjuster.value) {
+        try {
+          await adjustersApi.update(adjuster.value.id, { status: AdjusterStatus.AVAILABLE })
+          adjuster.value = { ...adjuster.value, status: AdjusterStatus.AVAILABLE }
+        } catch {
+          // Non-fatal — UI still clears
+        }
+      }
       activeAssignment.value = null
     }
   }

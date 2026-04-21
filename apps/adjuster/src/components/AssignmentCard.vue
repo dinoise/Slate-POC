@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Assignment } from '@slate/types'
+import { AssignmentStatus } from '@slate/types'
 import { useAdjusterSessionStore } from '@/stores/adjusterSession'
 
 const props = defineProps<{
@@ -20,33 +21,33 @@ const store = useAdjusterSessionStore()
 const updating = computed(() => store.loading)
 
 const STATUS_FLOW: Record<string, { next: Assignment['status']; label: string; color: string; icon: string } | null> = {
-  assigned:    { next: 'accepted',    label: 'Aceptar asignación',    color: 'success', icon: 'mdi-check-circle' },
-  accepted:    { next: 'en_route',    label: 'Iniciar ruta',          color: 'primary', icon: 'mdi-car-arrow-right' },
-  en_route:    { next: 'arrived',     label: 'He llegado',            color: 'warning', icon: 'mdi-map-marker-check' },
-  arrived:     { next: 'in_progress', label: 'Iniciar atención',      color: 'purple',  icon: 'mdi-tools' },
-  in_progress: { next: 'completed',   label: 'Completar atención',    color: 'info',    icon: 'mdi-clipboard-check' },
-  completed:   null,
-  cancelled:   null,
+  [AssignmentStatus.ASSIGNED]:    { next: AssignmentStatus.ACCEPTED,    label: 'Aceptar asignación', color: 'success', icon: 'mdi-check-circle' },
+  [AssignmentStatus.ACCEPTED]:    { next: AssignmentStatus.EN_ROUTE,    label: 'Iniciar ruta',       color: 'primary', icon: 'mdi-car-arrow-right' },
+  [AssignmentStatus.EN_ROUTE]:    { next: AssignmentStatus.ARRIVED,     label: 'He llegado',         color: 'warning', icon: 'mdi-map-marker-check' },
+  [AssignmentStatus.ARRIVED]:     { next: AssignmentStatus.IN_PROGRESS, label: 'Iniciar atención',   color: 'purple',  icon: 'mdi-tools' },
+  [AssignmentStatus.IN_PROGRESS]: { next: AssignmentStatus.COMPLETED,   label: 'Completar atención', color: 'info',    icon: 'mdi-clipboard-check' },
+  [AssignmentStatus.COMPLETED]:   null,
+  [AssignmentStatus.CANCELLED]:   null,
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  assigned:    'Asignada',
-  accepted:    'Aceptada',
-  en_route:    'En camino',
-  arrived:     'En sitio',
-  in_progress: 'En atención',
-  completed:   'Completada',
-  cancelled:   'Cancelada',
+  [AssignmentStatus.ASSIGNED]:    'Asignada',
+  [AssignmentStatus.ACCEPTED]:    'Aceptada',
+  [AssignmentStatus.EN_ROUTE]:    'En camino',
+  [AssignmentStatus.ARRIVED]:     'En sitio',
+  [AssignmentStatus.IN_PROGRESS]: 'En atención',
+  [AssignmentStatus.COMPLETED]:   'Completada',
+  [AssignmentStatus.CANCELLED]:   'Cancelada',
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  assigned:    'indigo',
-  accepted:    'primary',
-  en_route:    'blue',
-  arrived:     'purple',
-  in_progress: 'deep-purple',
-  completed:   'success',
-  cancelled:   'error',
+  [AssignmentStatus.ASSIGNED]:    'indigo',
+  [AssignmentStatus.ACCEPTED]:    'primary',
+  [AssignmentStatus.EN_ROUTE]:    'blue',
+  [AssignmentStatus.ARRIVED]:     'purple',
+  [AssignmentStatus.IN_PROGRESS]: 'deep-purple',
+  [AssignmentStatus.COMPLETED]:   'success',
+  [AssignmentStatus.CANCELLED]:   'error',
 }
 
 const nextAction = computed(() => STATUS_FLOW[props.assignment.status] ?? null)
@@ -67,9 +68,10 @@ const severityColor = computed(() => {
 })
 
 async function advance() {
-  if (!nextAction.value) return
-  await store.updateAssignmentStatus(props.assignment.id, nextAction.value.next)
-  emit('statusUpdated', nextAction.value.next)
+  const action = nextAction.value
+  if (!action) return
+  await store.updateAssignmentStatus(props.assignment.id, action.next)
+  emit('statusUpdated', action.next)
 }
 
 async function cancel() {
@@ -146,7 +148,7 @@ async function cancel() {
 
       <!-- Completed state -->
       <v-alert
-        v-else-if="assignment.status === 'completed'"
+        v-else-if="assignment.status === AssignmentStatus.COMPLETED"
         type="success"
         density="compact"
         class="mb-2"
@@ -156,7 +158,7 @@ async function cancel() {
 
       <!-- Open in Maps -->
       <v-btn
-        v-if="mapsUrl && assignment.status !== 'completed'"
+        v-if="mapsUrl && assignment.status !== AssignmentStatus.COMPLETED"
         :href="mapsUrl"
         target="_blank"
         variant="outlined"
@@ -171,7 +173,7 @@ async function cancel() {
 
       <!-- Cancel -->
       <v-btn
-        v-if="assignment.status !== 'completed' && assignment.status !== 'cancelled'"
+        v-if="assignment.status !== AssignmentStatus.COMPLETED && assignment.status !== AssignmentStatus.CANCELLED"
         variant="text"
         color="error"
         prepend-icon="mdi-close-circle"

@@ -243,6 +243,21 @@ importers:
 
   apps/reporter:
     dependencies:
+      '@slate/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      '@slate/composables':
+        specifier: workspace:*
+        version: link:../../packages/composables
+      '@slate/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@types/leaflet':
+        specifier: ^1.9.14
+        version: 1.9.21
+      leaflet:
+        specifier: ^1.9.4
+        version: 1.9.4
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2))
