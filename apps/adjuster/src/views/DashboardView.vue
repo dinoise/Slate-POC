@@ -169,9 +169,14 @@ watch(events, async (evts) => {
     console.debug('[SSE watcher] after loadActiveAssignment, activeAssignment:', JSON.stringify(store.activeAssignment))
   }
 
-  // Terminal events (cancelled / completed): clear map and stop — store already cleared by loadActiveAssignment
+  // Terminal events (cancelled / completed): clear map explicitly and stop
   if (ev.status === AssignmentStatus.CANCELLED || ev.status === AssignmentStatus.COMPLETED) {
-    console.debug('[SSE watcher] TERMINAL status — skipping map/meta update')
+    console.debug('[SSE watcher] TERMINAL status — clearing map')
+    if (map) {
+      if (incidentMarker) { map.removeLayer(incidentMarker); incidentMarker = null }
+      if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+    }
+    incidentMeta.value = { type: null, address: null, lat: null, lon: null, severity: null }
     return
   }
 
