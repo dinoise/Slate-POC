@@ -169,8 +169,8 @@ export interface AssignmentEvent {
   incident_id: number
   incident_type: IncidentType
   severity: SeverityLevel
-  description: string
-  address: string
+  description: string | null
+  address: string | null
   latitude: number
   longitude: number
   distance_km: number | null
