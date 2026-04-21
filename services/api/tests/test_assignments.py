@@ -171,7 +171,7 @@ async def test_cancel_assignment_releases(client: AsyncClient, db_session: Async
     assert adj_resp.json()["status"] == "available"
 
     inc_resp = await client.get(api(f"/incidents/{incident.id}"))
-    assert inc_resp.json()["status"] == "pending"
+    assert inc_resp.json()["status"] == "cancelled"
 
 
 async def test_update_assignment_status_flow(client: AsyncClient, db_session: AsyncSession) -> None:
