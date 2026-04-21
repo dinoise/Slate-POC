@@ -43,6 +43,11 @@ on:
         required: false
         type: number
         default: 5
+      concurrency:
+        description: "Número máximo de solicitudes simultáneas por instancia (1-1000). Bajar este valor para SSE de larga duración."
+        required: false
+        type: number
+        default: 80
       timeout:
         required: false
         type: string
@@ -153,6 +158,7 @@ jobs:
             --cpu=${{ inputs.cpu }}
             --min-instances=${{ inputs.min-instances }}
             --max-instances=${{ inputs.max-instances }}
+            --concurrency=${{ inputs.concurrency }}
             --timeout=${{ inputs.timeout }}
             ${{ inputs.allow-unauthenticated && '--allow-unauthenticated' || '--no-allow-unauthenticated' }}
             ${{ inputs.runtime-service-account != '' && format('--service-account={0}', inputs.runtime-service-account) || '' }}

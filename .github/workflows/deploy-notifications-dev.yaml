@@ -53,9 +53,10 @@ jobs:
       image-tag: ${{ needs.build.outputs.image-tag }}
       environment: dev
       memory: 512Mi
-      cpu: "0.5"
+      cpu: "1"
       min-instances: 0
-      max-instances: 1
+      max-instances: 3
+      concurrency: 10
       timeout: 3600s
       runtime-service-account: poc-notifications@lennken-poc.iam.gserviceaccount.com
       allow-unauthenticated: true
