@@ -44,12 +44,14 @@ export const useReporterSessionStore = defineStore('reporterSession', () => {
     error.value = null
     try {
       incident.value = await incidentsApi.get(id)
-      // Load the most recent assignment for initial state
+      // Prefer the active (non-terminal) assignment; fall back to most recent overall
       const list = await assignmentsApi.byIncident(id)
+      const TERMINAL = new Set(['cancelled', 'completed'])
+      const active = list.find((a) => !TERMINAL.has(a.status))
       const latest = list.sort(
         (a, b) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime(),
       )[0]
-      assignment.value = latest ?? null
+      assignment.value = active ?? latest ?? null
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Error al cargar incidente'
     } finally {

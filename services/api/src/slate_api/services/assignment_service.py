@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 
 import numpy as np
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from slate_core.geospatial.base import RoutingProvider
@@ -372,13 +373,24 @@ class AssignmentService:
 
             if request.persist:
                 travel_min = round(r.travel_time_s / 60)
-                assignment = await self.repository.create(
-                    incident_id=incident.incident_id,
-                    adjuster_id=adjuster.adjuster_id,
-                    assigned_at=datetime.now(),
-                    travel_time_minutes=travel_min,
-                    status=AssignmentStatus.ASSIGNED,
-                )
+                try:
+                    assignment = await self.repository.create(
+                        incident_id=incident.incident_id,
+                        adjuster_id=adjuster.adjuster_id,
+                        assigned_at=datetime.now(),
+                        travel_time_minutes=travel_min,
+                        status=AssignmentStatus.ASSIGNED,
+                    )
+                except IntegrityError:
+                    # Another concurrent optimizer run already assigned this
+                    # incident (uq_one_active_assignment_per_incident violation).
+                    # Skip silently — the first writer wins.
+                    logger.warning(
+                        "Skipping duplicate assignment for incident_id=%d "
+                        "(already assigned by concurrent request)",
+                        incident.incident_id,
+                    )
+                    continue
                 db_id = assignment.id
                 # Mark incident as assigned
                 await self.incident_repository.update(

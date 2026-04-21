@@ -124,9 +124,13 @@ const canSubmit = computed(
 
 // Modal state
 const showForm = ref(false)
+// Local guard — set synchronously before any await so double-tap on mobile
+// cannot fire a second submission before Vue re-renders the disabled button.
+const submitting = ref(false)
 
 async function submit() {
-  if (!canSubmit.value || !user.value) return
+  if (!canSubmit.value || !user.value || submitting.value) return
+  submitting.value = true
   try {
     const incident = await store.submitIncident({
       incident_type: form.value.incident_type,
@@ -140,6 +144,7 @@ async function submit() {
     router.push(`/track/${incident.id}`)
   } catch {
     // error shown via store.error
+    submitting.value = false
   }
 }
 
@@ -293,8 +298,8 @@ watch(
           <button class="btn btn-ghost" @click="showForm = false">Cancelar</button>
           <button
             class="btn btn-primary flex-1"
-            :class="store.loading ? 'loading' : ''"
-            :disabled="!canSubmit || store.loading"
+            :class="store.loading || submitting ? 'loading' : ''"
+            :disabled="!canSubmit || store.loading || submitting"
             @click="submit"
           >
             {{ store.loading ? 'Enviando…' : 'Enviar reporte' }}
