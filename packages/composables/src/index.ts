@@ -1,4 +1,6 @@
 export { useSSE } from './useSSE'
+export { useIncidentSSE } from './useIncidentSSE'
+export type { UseIncidentSSEReturn } from './useIncidentSSE'
 export { useGeolocation } from './useGeolocation'
 export { useRoute } from './useRoute'
 export type { RouteResult, TrafficSegment } from './useRoute'

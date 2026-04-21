@@ -143,12 +143,17 @@ watch(
 const adjusterId = computed(() => store.adjusterId)
 const { events, connected } = useSSE(adjusterId)
 
-const latestEvent = ref<AssignmentEvent | null>(null)
+// Only new-assignment events trigger the banner (not status transitions)
+const latestNewAssignmentEvent = ref<AssignmentEvent | null>(null)
 
 watch(events, async (evts) => {
   const ev = evts[0]
   if (!ev) return
-  latestEvent.value = ev
+
+  // Show banner only for new assignments, not for status transitions on existing ones
+  if (ev.event_type === 'assignment.created' || ev.status === 'assigned') {
+    latestNewAssignmentEvent.value = ev
+  }
 
   // Update incident meta from SSE payload (already enriched by notifications service)
   incidentMeta.value = {
@@ -325,8 +330,8 @@ const sseBadgeText = computed(() => {
     </div>
   </v-main>
 
-  <!-- SSE new assignment banner -->
-  <NewAssignmentBanner :event="latestEvent" />
+  <!-- SSE new assignment banner (only fires on new assignment, not status transitions) -->
+  <NewAssignmentBanner :event="latestNewAssignmentEvent" />
 
   <!-- Completion / cancellation snackbar -->
   <v-snackbar

@@ -1,16 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { incidentsApi, assignmentsApi } from '@slate/api-client'
-import type { Incident, Assignment } from '@slate/types'
-import { type IncidentType, type SeverityLevel, ACTIVE_ASSIGNMENT_STATUSES, TERMINAL_ASSIGNMENT_STATUSES } from '@slate/types'
+import type { Incident, Assignment, AssignmentEvent } from '@slate/types'
+import { type IncidentType, type SeverityLevel } from '@slate/types'
 
 export const useReporterSessionStore = defineStore('reporterSession', () => {
   const incident = ref<Incident | null>(null)
   const assignment = ref<Assignment | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
-  // Stored as a ref so HMR module re-evaluation doesn't orphan the interval ID
-  const _pollTimer = ref<ReturnType<typeof setInterval> | null>(null)
 
   async function submitIncident(payload: {
     incident_type: IncidentType
@@ -30,10 +28,8 @@ export const useReporterSessionStore = defineStore('reporterSession', () => {
       })
       incident.value = created
       assignment.value = null
-      // Trigger optimizer immediately
+      // Trigger optimizer immediately so an adjuster gets assigned
       await assignmentsApi.optimize({ use_db: true })
-      // Start polling for assignment
-      startPolling(created.id)
       return created
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Error al enviar incidente'
@@ -48,10 +44,12 @@ export const useReporterSessionStore = defineStore('reporterSession', () => {
     error.value = null
     try {
       incident.value = await incidentsApi.get(id)
-      await pollAssignment(id)
-      // Only poll if no terminal assignment already found
-      const alreadyDone = assignment.value && TERMINAL_ASSIGNMENT_STATUSES.has(assignment.value.status)
-      if (!alreadyDone) startPolling(id)
+      // Load the most recent assignment for initial state
+      const list = await assignmentsApi.byIncident(id)
+      const latest = list.sort(
+        (a, b) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime(),
+      )[0]
+      assignment.value = latest ?? null
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Error al cargar incidente'
     } finally {
@@ -59,41 +57,28 @@ export const useReporterSessionStore = defineStore('reporterSession', () => {
     }
   }
 
-  async function pollAssignment(incidentId: number) {
-    try {
-      // Refresh incident status in parallel with assignment list
-      const [list, freshIncident] = await Promise.all([
-        assignmentsApi.byIncident(incidentId),
-        incidentsApi.get(incidentId),
-      ])
-      incident.value = freshIncident
-
-      // Pick the most recent assignment so reporter tracks the full flow
-      const latest = list.sort(
-        (a, b) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime(),
-      )[0]
-      if (latest) {
-        assignment.value = latest
-        // Stop polling only when terminal — keep updating while active
-        if (TERMINAL_ASSIGNMENT_STATUSES.has(latest.status)) stopPolling()
-      } else if (!ACTIVE_ASSIGNMENT_STATUSES.has(assignment.value?.status ?? 'assigned')) {
-        assignment.value = null
-      }
-    } catch {
-      // silent — keep polling
-    }
-  }
-
-  function startPolling(incidentId: number) {
-    stopPolling()
-    _pollTimer.value = setInterval(() => pollAssignment(incidentId), 3_000)
-  }
-
-  function stopPolling() {
-    if (_pollTimer.value !== null) {
-      clearInterval(_pollTimer.value)
-      _pollTimer.value = null
-    }
+  /** Called by TrackView when an SSE event arrives — updates local state. */
+  function applySSEEvent(ev: AssignmentEvent) {
+    assignment.value = {
+      id: ev.assignment_id,
+      incident_id: ev.incident_id,
+      adjuster_id: ev.adjuster_id,
+      status: ev.status,
+      distance_km: ev.distance_km,
+      travel_time_minutes: ev.travel_time_minutes,
+      optimization_score: null,
+      assigned_at: ev.assigned_at,
+      estimated_arrival_time: null,
+      actual_arrival_time: null,
+      completed_at: null,
+      notes: null,
+      route_polyline: ev.route_polyline,
+      route_provider: ev.route_provider,
+      route_distance_m: ev.route_distance_m,
+      route_duration_s: ev.route_duration_s,
+      created_at: ev.assigned_at,
+      updated_at: ev.assigned_at,
+    } satisfies Assignment
   }
 
   async function cancelIncident() {
@@ -101,8 +86,8 @@ export const useReporterSessionStore = defineStore('reporterSession', () => {
     loading.value = true
     error.value = null
     try {
+      // DELETE triggers soft_delete_incident: cancels active assignments + releases adjuster
       await incidentsApi.delete(incident.value.id)
-      stopPolling()
       incident.value = null
       assignment.value = null
     } catch (e) {
@@ -113,7 +98,6 @@ export const useReporterSessionStore = defineStore('reporterSession', () => {
   }
 
   function reset() {
-    stopPolling()
     incident.value = null
     assignment.value = null
     error.value = null
@@ -127,9 +111,7 @@ export const useReporterSessionStore = defineStore('reporterSession', () => {
     error,
     submitIncident,
     loadIncident,
-    pollAssignment,
-    startPolling,
-    stopPolling,
+    applySSEEvent,
     cancelIncident,
     reset,
   }

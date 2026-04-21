@@ -4,6 +4,7 @@ import { useRoute as useVueRoute, useRouter } from 'vue-router'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useReporterSessionStore } from '@/stores/reporterSession'
+import { useIncidentSSE } from '@slate/composables'
 import { adjustersApi } from '@slate/api-client'
 import type { Adjuster } from '@slate/types'
 import { AssignmentStatus, TERMINAL_ASSIGNMENT_STATUSES } from '@slate/types'
@@ -13,6 +14,14 @@ const router = useRouter()
 const store = useReporterSessionStore()
 
 const incidentId = computed(() => Number(vueRoute.params['id']))
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+const { event: sseEvent, connected } = useIncidentSSE(incidentId)
+
+watch(sseEvent, (ev) => {
+  if (!ev) return
+  store.applySSEEvent(ev)
+})
 
 // ── Map ───────────────────────────────────────────────────────────────────────
 const mapContainer = ref<HTMLElement>()
@@ -46,7 +55,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  store.stopPolling()
   map?.remove()
   map = null
 })
@@ -58,19 +66,19 @@ watch(
   () => store.assignment,
   async (asgn) => {
     if (!asgn) return
-    try {
-      adjuster.value = await adjustersApi.get(asgn.adjuster_id)
-    } catch {
-      // silent
+    // Only fetch adjuster info once (first assignment or adjuster change)
+    if (!adjuster.value || adjuster.value.id !== asgn.adjuster_id) {
+      try {
+        adjuster.value = await adjustersApi.get(asgn.adjuster_id)
+      } catch {
+        // silent
+      }
     }
     updateMap()
   },
 )
 
-watch(
-  () => store.incident,
-  () => updateMap(),
-)
+watch(() => store.incident, () => updateMap())
 
 function updateMap() {
   if (!map) return
@@ -78,7 +86,6 @@ function updateMap() {
   const asgn = store.assignment
   const adj = adjuster.value
 
-  // Place incident marker
   if (inc) {
     if (incidentMarker) map.removeLayer(incidentMarker)
     incidentMarker = L.marker([inc.latitude, inc.longitude], { icon: incIcon })
@@ -87,7 +94,6 @@ function updateMap() {
     map.setView([inc.latitude, inc.longitude], 14)
   }
 
-  // Place adjuster marker and draw straight line (route polyline not available for reporter)
   if (adj && asgn) {
     const adjLat = adj.current_latitude ?? adj.home_latitude
     const adjLon = adj.current_longitude ?? adj.home_longitude
@@ -97,7 +103,6 @@ function updateMap() {
       .bindTooltip(`${adj.first_name} ${adj.last_name}`, { permanent: false })
       .addTo(map)
 
-    // Draw straight dashed line between adjuster and incident
     if (inc) {
       if (routeLine) map.removeLayer(routeLine)
       routeLine = L.polyline(
@@ -122,7 +127,7 @@ const statusConfig: Record<string, { label: string; badge: string; emoji: string
   [AssignmentStatus.CANCELLED]:     { label: 'Cancelado',           badge: 'badge-error',   emoji: '✖️' },
 }
 
-const incidentStatus = computed(() => store.incident?.status ?? AssignmentStatus.ASSIGNED)
+const incidentStatus = computed(() => store.incident?.status ?? 'pending')
 const assignmentStatus = computed(() => store.assignment?.status ?? null)
 
 const displayStatus = computed(() => {
@@ -135,7 +140,7 @@ const isTerminal = computed(() =>
   store.assignment ? TERMINAL_ASSIGNMENT_STATUSES.has(store.assignment.status) : false,
 )
 
-// Show toast when status changes
+// Toast on each status transition
 const statusToast = ref<string | null>(null)
 watch(assignmentStatus, (newStatus, oldStatus) => {
   if (!newStatus || newStatus === oldStatus) return
@@ -173,6 +178,15 @@ async function cancel() {
       </div>
       <div class="flex-1">
         <span class="text-sm font-bold">Seguimiento #{{ incidentId }}</span>
+      </div>
+      <!-- SSE connection indicator -->
+      <div class="flex-none">
+        <span
+          :class="['badge badge-xs', connected ? 'badge-success' : 'badge-warning']"
+          :title="connected ? 'Conectado' : 'Reconectando…'"
+        >
+          {{ connected ? '● En vivo' : '○ Reconectando' }}
+        </span>
       </div>
     </div>
 
@@ -226,10 +240,7 @@ async function cancel() {
           </div>
 
           <!-- Waiting for adjuster -->
-          <div
-            v-else-if="!isTerminal"
-            class="flex items-center gap-2 text-sm text-base-content/60"
-          >
+          <div v-else-if="!isTerminal" class="flex items-center gap-2 text-sm text-base-content/60">
             <span class="loading loading-dots loading-xs" />
             Buscando ajustador disponible…
           </div>

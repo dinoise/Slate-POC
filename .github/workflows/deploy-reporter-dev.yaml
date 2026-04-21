@@ -31,7 +31,8 @@ jobs:
       tag: dev
       environment: dev
       vite-api-base-url: https://slate-api-dev-43634032496.us-central1.run.app
-      vite-google-client-id: PLACEHOLDER_REPORTER_CLIENT_ID
+      vite-notifications-url: https://slate-notifications-dev-43634032496.us-central1.run.app
+      vite-google-client-id: 43634032496-h2m4tffdhi903fq2pt22nm3cir0bk3ot.apps.googleusercontent.com
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}

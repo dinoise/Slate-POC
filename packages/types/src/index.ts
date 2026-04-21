@@ -177,6 +177,9 @@ export interface AssignmentEvent {
   travel_time_minutes: number | null
   status: AssignmentStatus
   assigned_at: string
+  // Discriminator — 'assignment.created' | 'assignment.updated'
+  // Present in outbox-sourced events; may be absent in legacy pg_notify events
+  event_type?: string
   // Route fields — present once route-fetching job has run
   route_polyline: string | null
   route_provider: string | null

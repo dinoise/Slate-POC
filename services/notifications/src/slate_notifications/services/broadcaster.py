@@ -23,36 +23,72 @@ _OUTBOX_POLL_INTERVAL = 30  # seconds
 
 class NotificationBroadcaster:
     """
-    Per-adjuster SSE subscriber queues.
+    SSE subscriber queues — indexed by adjuster_id AND incident_id.
 
-    subscribe(adjuster_id)          → Queue  — SSE connection opens
-    unsubscribe(adjuster_id, queue)          — SSE generator finally block
-    broadcast(adjuster_id, payload)          — pg_notify callback
+    Adjuster streams: subscribe(adjuster_id=X)
+    Reporter streams: subscribe(incident_id=X)
+
+    broadcast() routes to both buckets automatically using the payload fields.
     """
 
     def __init__(self) -> None:
-        self._subscribers: dict[int, set[asyncio.Queue[dict]]] = {}
+        self._by_adjuster: dict[int, set[asyncio.Queue[dict]]] = {}
+        self._by_incident: dict[int, set[asyncio.Queue[dict]]] = {}
 
-    def subscribe(self, adjuster_id: int) -> asyncio.Queue[dict]:
+    def subscribe(
+        self,
+        *,
+        adjuster_id: int | None = None,
+        incident_id: int | None = None,
+    ) -> asyncio.Queue[dict]:
+        if adjuster_id is None and incident_id is None:
+            raise ValueError("adjuster_id or incident_id required")
         queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=50)
-        self._subscribers.setdefault(adjuster_id, set()).add(queue)
-        logger.debug("SSE subscriber added for adjuster %d", adjuster_id)
+        if adjuster_id is not None:
+            self._by_adjuster.setdefault(adjuster_id, set()).add(queue)
+            logger.debug("SSE subscriber added for adjuster %d", adjuster_id)
+        if incident_id is not None:
+            self._by_incident.setdefault(incident_id, set()).add(queue)
+            logger.debug("SSE subscriber added for incident %d", incident_id)
         return queue
 
-    def unsubscribe(self, adjuster_id: int, queue: asyncio.Queue[dict]) -> None:
-        bucket = self._subscribers.get(adjuster_id)
-        if bucket:
-            bucket.discard(queue)
-            if not bucket:
-                del self._subscribers[adjuster_id]
-        logger.debug("SSE subscriber removed for adjuster %d", adjuster_id)
+    def unsubscribe(
+        self,
+        queue: asyncio.Queue[dict],
+        *,
+        adjuster_id: int | None = None,
+        incident_id: int | None = None,
+    ) -> None:
+        if adjuster_id is not None:
+            bucket = self._by_adjuster.get(adjuster_id)
+            if bucket:
+                bucket.discard(queue)
+                if not bucket:
+                    del self._by_adjuster[adjuster_id]
+            logger.debug("SSE subscriber removed for adjuster %d", adjuster_id)
+        if incident_id is not None:
+            bucket = self._by_incident.get(incident_id)
+            if bucket:
+                bucket.discard(queue)
+                if not bucket:
+                    del self._by_incident[incident_id]
+            logger.debug("SSE subscriber removed for incident %d", incident_id)
 
     async def broadcast(self, adjuster_id: int, payload: dict) -> None:
-        for queue in list(self._subscribers.get(adjuster_id, set())):
+        incident_id: int | None = payload.get("incident_id")
+        targets: list[asyncio.Queue[dict]] = [
+            *self._by_adjuster.get(adjuster_id, set()),
+            *(self._by_incident.get(incident_id, set()) if incident_id else []),
+        ]
+        for queue in targets:
             try:
                 queue.put_nowait(payload)
             except asyncio.QueueFull:
-                logger.warning("Queue full for adjuster %d — dropping event", adjuster_id)
+                logger.warning(
+                    "Queue full for adjuster %d / incident %s — dropping event",
+                    adjuster_id,
+                    incident_id,
+                )
 
 
 broadcaster = NotificationBroadcaster()
