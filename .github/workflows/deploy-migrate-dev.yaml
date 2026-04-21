@@ -27,6 +27,8 @@ jobs:
   migrate:
     name: "Alembic upgrade via IAP tunnel"
     runs-on: ubuntu-latest
+    # Retry once on transient IAP tunnel failures (4003 / backend not ready)
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -58,16 +60,17 @@ jobs:
             --project="${{ secrets.GCP_PROJECT_ID }}" &
           echo "IAP_TUNNEL_PID=$!" >> "$GITHUB_ENV"
 
-          # Espera activa: intenta conectar cada segundo hasta 30s
-          # Más robusto que sleep fijo — el túnel puede tardar entre 3-15s
+          # Espera activa: intenta conectar cada segundo hasta 60s
+          # IAP tunnel puede tardar 3-15s en condiciones normales;
+          # 60s cubre picos de latencia transitoria en los servidores de Google.
           echo "Esperando que el túnel IAP esté listo..."
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             if nc -z localhost ${{ env.LOCAL_TUNNEL_PORT }} 2>/dev/null; then
               echo "Túnel listo después de ${i}s."
               break
             fi
-            if [ "$i" -eq 30 ]; then
-              echo "ERROR: El túnel IAP no respondió después de 30s."
+            if [ "$i" -eq 60 ]; then
+              echo "ERROR: El túnel IAP no respondió después de 60s."
               exit 1
             fi
             sleep 1
