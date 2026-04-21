@@ -111,14 +111,19 @@ const incidentMeta = ref<{
 watch(
   () => store.activeAssignment,
   async (assignment) => {
+    console.debug('[activeAssignment watcher] assignment:', JSON.stringify(assignment), '| incidentMeta:', JSON.stringify(incidentMeta.value))
     if (!map || !assignment) {
+      console.debug('[activeAssignment watcher] clearing map — assignment is null/no map')
       if (incidentMarker && map) { map.removeLayer(incidentMarker); incidentMarker = null }
       if (routeLayer && map) { removeRouteLayer(map, routeLayer); routeLayer = null }
       return
     }
     // Assignment loaded from REST — incidentMeta may need fetching
     // If already set via SSE event keep it; otherwise use what we have
-    if (!incidentMeta.value.lat) return
+    if (!incidentMeta.value.lat) {
+      console.debug('[activeAssignment watcher] SKIPPED — incidentMeta.lat is null')
+      return
+    }
 
     const adj = store.adjuster
     const { lat, lon } = incidentMeta.value
@@ -148,10 +153,31 @@ const latestNewAssignmentEvent = ref<AssignmentEvent | null>(null)
 
 watch(events, async (evts) => {
   const ev = evts[0]
-  if (!ev) return
+  console.debug('[SSE watcher] raw evts[0]:', JSON.stringify(ev))
+
+  // Guard: event must have real assignment data (not an empty reconnect artifact)
+  if (!ev || !ev.assignment_id) {
+    console.debug('[SSE watcher] SKIPPED — no assignment_id', ev)
+    return
+  }
+
+  console.debug('[SSE watcher] processing event', ev.assignment_id, 'status:', ev.status, 'event_type:', ev.event_type)
+
+  // Reload store first so we know the real current state
+  if (store.adjuster) {
+    await store.loadActiveAssignment(store.adjuster.id)
+    console.debug('[SSE watcher] after loadActiveAssignment, activeAssignment:', JSON.stringify(store.activeAssignment))
+  }
+
+  // Terminal events (cancelled / completed): clear map and stop — store already cleared by loadActiveAssignment
+  if (ev.status === AssignmentStatus.CANCELLED || ev.status === AssignmentStatus.COMPLETED) {
+    console.debug('[SSE watcher] TERMINAL status — skipping map/meta update')
+    return
+  }
 
   // Show banner only for new assignments, not for status transitions on existing ones
-  if (ev.event_type === 'assignment.created' || ev.status === 'assigned') {
+  if (ev.event_type === 'assignment.created' || ev.status === AssignmentStatus.ASSIGNED) {
+    console.debug('[SSE watcher] showing new-assignment banner')
     latestNewAssignmentEvent.value = ev
   }
 
@@ -163,6 +189,7 @@ watch(events, async (evts) => {
     lon: ev.longitude ?? null,
     severity: typeof ev.severity === 'number' ? ev.severity : null,
   }
+  console.debug('[SSE watcher] incidentMeta set to:', JSON.stringify(incidentMeta.value))
 
   // Place marker and draw route
   if (!map) return
@@ -189,11 +216,6 @@ watch(events, async (evts) => {
         await drawRoute(adjLat, adjLon, ev.latitude, ev.longitude)
       }
     }
-  }
-
-  // Reload active assignment to update store
-  if (store.adjuster) {
-    await store.loadActiveAssignment(store.adjuster.id)
   }
 })
 

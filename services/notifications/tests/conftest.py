@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -18,22 +18,20 @@ def _mock_verify_token() -> dict:
 
 @pytest_asyncio.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
-    """
-    httpx AsyncClient wired to the notifications FastAPI app.
+    """httpx AsyncClient wired to the notifications FastAPI app.
 
-    Patches:
-    - start_listener / stop_listener — no real asyncpg LISTEN in tests
-    - verify_google_token — no real Google token validation in tests
+    Patches the background tasks (listener + outbox poller) so no real
+    asyncpg connection or DB session is required during tests.
     """
+
+    # Patch the coroutine functions used inside the lifespan so that the
+    # asyncio.create_task() calls in main.py don't start real background work.
+    async def _noop(*_args, **_kwargs) -> None:  # noqa: RUF029
+        pass
+
     with (
-        patch(
-            "slate_notifications.main.start_listener",
-            new_callable=lambda: lambda: AsyncMock(),
-        ),
-        patch(
-            "slate_notifications.main.stop_listener",
-            new_callable=lambda: lambda: AsyncMock(),
-        ),
+        patch("slate_notifications.services.listener.listen", new=_noop),
+        patch("slate_notifications.services.outbox_poller.poll", new=_noop),
     ):
         from slate_notifications.main import app
 

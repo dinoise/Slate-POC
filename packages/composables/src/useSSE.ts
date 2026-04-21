@@ -46,6 +46,8 @@ export function useSSE(adjusterId: Ref<number | null>): UseSSEReturn {
     source = null
     connected.value = false
     connectedFor = null
+    // Clear stale events so a new adjuster selection starts fresh
+    events.value = []
   }
 
   function connect() {
@@ -60,10 +62,11 @@ export function useSSE(adjusterId: Ref<number | null>): UseSSEReturn {
     connectedFor = id
 
     const token = getAuthToken()
-    const params = new URLSearchParams({ adjuster_id: String(id) })
+    const params = new URLSearchParams()
     if (token) params.set('token', token)
+    const qs = params.toString() ? `?${params}` : ''
 
-    source = new EventSource(`${notificationsUrl}/notifications/stream?${params}`)
+    source = new EventSource(`${notificationsUrl}/notifications/stream/adjusters/${id}${qs}`)
 
     source.addEventListener('connected', () => {
       connected.value = true

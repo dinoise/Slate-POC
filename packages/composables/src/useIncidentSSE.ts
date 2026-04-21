@@ -53,10 +53,11 @@ export function useIncidentSSE(incidentId: Ref<number | null>): UseIncidentSSERe
     connectedFor = id
 
     const token = getAuthToken()
-    const params = new URLSearchParams({ incident_id: String(id) })
+    const params = new URLSearchParams()
     if (token) params.set('token', token)
+    const qs = params.toString() ? `?${params}` : ''
 
-    source = new EventSource(`${notificationsUrl}/notifications/stream/incident?${params}`)
+    source = new EventSource(`${notificationsUrl}/notifications/stream/incidents/${id}${qs}`)
 
     source.addEventListener('connected', () => {
       connected.value = true

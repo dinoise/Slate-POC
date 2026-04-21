@@ -1,4 +1,29 @@
-"""SSE stream endpoint — notifications service."""
+"""SSE stream endpoints — notifications service.
+
+Routes:
+    GET /notifications/stream/adjusters/{adjuster_id}
+        Subscribe to assignment events for a specific adjuster.
+        Consumed by the adjuster app.
+
+    GET /notifications/stream/incidents/{incident_id}
+        Subscribe to assignment events for a specific incident.
+        Consumed by the reporter app to track assignment progress.
+
+Design:
+    Route handlers are intentionally thin — each handler:
+    1. Subscribes to the broadcaster.
+    2. Returns a ``StreamingResponse`` wrapping ``_event_generator()``.
+    3. Unsubscribes on disconnect (inside the generator's ``finally`` block).
+
+    Enrichment (DB JOIN to add incident fields) is delegated to
+    ``services.enricher.Enricher``, which is injected via ``Depends``.
+
+Auth:
+    Google token verified via ``verify_google_token`` dependency.
+    The native ``EventSource`` API does not support custom headers, so
+    the token is accepted as a ``?token=`` query parameter in addition
+    to the standard ``Authorization`` header.
+"""
 
 from __future__ import annotations
 
@@ -6,128 +31,134 @@ import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends
+from fastapi.requests import Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.auth import verify_google_token
 from ..core.database import get_db
-from ..repositories.assignment_repository import AssignmentRepository, EnrichedAssignment
+from ..domain.channels import Channel
 from ..services.broadcaster import broadcaster
+from ..services.enricher import Enricher
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 logger = logging.getLogger(__name__)
 
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "X-Accel-Buffering": "no",
+    "Connection": "keep-alive",
+}
+_KEEPALIVE_INTERVAL = 15  # seconds
 
-async def _enrich(payload: dict, db: AsyncSession) -> dict:
-    """Join assignment + incident data for the SSE payload using SQLAlchemy ORM.
 
-    Falls back to the raw payload if the DB lookup fails.
+async def _event_generator(
+    request: Request,
+    channel: Channel,
+    entity_id: int,
+    enricher: Enricher,
+) -> object:
+    """Yield SSE-formatted strings for as long as the client is connected.
+
+    Sends an initial ``connected`` event as a handshake, then waits on
+    the broadcaster queue.  A keepalive comment (``': keepalive'``) is
+    sent every ``_KEEPALIVE_INTERVAL`` seconds to prevent proxy timeouts.
+
+    The queue is automatically unsubscribed in the ``finally`` block,
+    regardless of how the generator exits (client disconnect, server
+    shutdown, or exception).
+
+    Args:
+        request: FastAPI request — used to detect client disconnection.
+        channel: Broadcaster channel this stream is subscribed to.
+        entity_id: Entity ID (adjuster PK or incident PK) to watch.
+        enricher: Enricher instance for DB-joining raw payloads.
+
+    Yields:
+        SSE-formatted strings: ``event: <name>\\ndata: <json>\\n\\n``
+        or ``': keepalive\\n\\n'`` comments.
     """
+    queue = broadcaster.subscribe(channel, entity_id)
     try:
-        repo = AssignmentRepository(db)
-        enriched: EnrichedAssignment | None = await repo.get_enriched(int(payload["assignment_id"]))
-        if enriched is None:
-            return payload
-
-        return {
-            "assignment_id": enriched.assignment_id,
-            "adjuster_id": enriched.adjuster_id,
-            "incident_id": enriched.incident_id,
-            "status": enriched.status,
-            "distance_km": enriched.distance_km,
-            "travel_time_minutes": enriched.travel_time_minutes,
-            "assigned_at": enriched.assigned_at.isoformat() if enriched.assigned_at else None,
-            "route_polyline": enriched.route_polyline,
-            "route_provider": enriched.route_provider,
-            "route_distance_m": enriched.route_distance_m,
-            "route_duration_s": enriched.route_duration_s,
-            "incident_type": enriched.incident_type,
-            "severity": enriched.severity,
-            "description": enriched.description,
-            "address": enriched.address,
-            "latitude": enriched.latitude,
-            "longitude": enriched.longitude,
-        }
-    except Exception:
-        logger.exception(
-            "Enrichment failed for assignment %s — forwarding raw payload",
-            payload.get("assignment_id"),
-        )
-        return payload
+        yield "event: connected\ndata: {}\n\n"
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                payload = await asyncio.wait_for(queue.get(), timeout=_KEEPALIVE_INTERVAL)
+                event = await enricher.enrich(payload)
+                yield f"event: assignment\ndata: {json.dumps(event.model_dump())}\n\n"
+            except TimeoutError:
+                yield ": keepalive\n\n"
+    except asyncio.CancelledError:
+        pass
+    finally:
+        broadcaster.unsubscribe(channel, entity_id, queue)
+        logger.info("SSE stream closed — channel=%s entity_id=%d", channel.value, entity_id)
 
 
-@router.get("/stream", dependencies=[Depends(verify_google_token)])
-async def notification_stream(
+@router.get(
+    "/stream/adjusters/{adjuster_id}",
+    dependencies=[Depends(verify_google_token)],
+    summary="SSE stream for an adjuster",
+    description=(
+        "Subscribe to real-time assignment events for a specific adjuster. "
+        "Delivers ``assignment`` events whenever an assignment is created or "
+        "its status changes. Used by the adjuster app."
+    ),
+)
+async def adjuster_stream(
+    adjuster_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    adjuster_id: int = Query(..., gt=0, description="Adjuster ID to subscribe to"),
 ) -> StreamingResponse:
-    """SSE stream for a specific adjuster."""
-    queue = broadcaster.subscribe(adjuster_id=adjuster_id)
+    """Open an SSE stream for a specific adjuster.
 
-    async def event_generator():
-        try:
-            yield "event: connected\ndata: {}\n\n"
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    payload = await asyncio.wait_for(queue.get(), timeout=15.0)
-                    enriched = await _enrich(payload, db)
-                    yield f"event: assignment\ndata: {json.dumps(enriched)}\n\n"
-                except TimeoutError:
-                    yield ": keepalive\n\n"
-        except asyncio.CancelledError:
-            pass
-        finally:
-            broadcaster.unsubscribe(queue, adjuster_id=adjuster_id)
-            logger.info("SSE stream closed for adjuster %d", adjuster_id)
+    Args:
+        adjuster_id: PK of the adjuster to subscribe to.
+        request: Injected by FastAPI — used for disconnect detection.
+        db: Async DB session injected by FastAPI.
 
+    Returns:
+        A ``StreamingResponse`` with ``text/event-stream`` media type.
+    """
+    enricher = Enricher(db)
     return StreamingResponse(
-        event_generator(),
+        _event_generator(request, Channel.ADJUSTER, adjuster_id, enricher),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-        },
+        headers=_SSE_HEADERS,
     )
 
 
-@router.get("/stream/incident", dependencies=[Depends(verify_google_token)])
+@router.get(
+    "/stream/incidents/{incident_id}",
+    dependencies=[Depends(verify_google_token)],
+    summary="SSE stream for an incident",
+    description=(
+        "Subscribe to real-time assignment events for a specific incident. "
+        "Delivers ``assignment`` events as the assigned adjuster progresses "
+        "through their workflow. Used by the reporter app."
+    ),
+)
 async def incident_stream(
+    incident_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    incident_id: int = Query(..., gt=0, description="Incident ID to subscribe to"),
 ) -> StreamingResponse:
-    """SSE stream for a reporter tracking a specific incident."""
-    queue = broadcaster.subscribe(incident_id=incident_id)
+    """Open an SSE stream for a specific incident.
 
-    async def event_generator():
-        try:
-            yield "event: connected\ndata: {}\n\n"
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    payload = await asyncio.wait_for(queue.get(), timeout=15.0)
-                    enriched = await _enrich(payload, db)
-                    yield f"event: assignment\ndata: {json.dumps(enriched)}\n\n"
-                except TimeoutError:
-                    yield ": keepalive\n\n"
-        except asyncio.CancelledError:
-            pass
-        finally:
-            broadcaster.unsubscribe(queue, incident_id=incident_id)
-            logger.info("SSE stream closed for incident %d", incident_id)
+    Args:
+        incident_id: PK of the incident to subscribe to.
+        request: Injected by FastAPI — used for disconnect detection.
+        db: Async DB session injected by FastAPI.
 
+    Returns:
+        A ``StreamingResponse`` with ``text/event-stream`` media type.
+    """
+    enricher = Enricher(db)
     return StreamingResponse(
-        event_generator(),
+        _event_generator(request, Channel.INCIDENT, incident_id, enricher),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-        },
+        headers=_SSE_HEADERS,
     )

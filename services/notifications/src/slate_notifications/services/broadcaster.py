@@ -1,193 +1,143 @@
-"""pg_notify listener and SSE broadcaster — notifications service."""
+"""In-memory SSE broadcaster — routes payloads to subscriber queues.
+
+Responsibilities (single):
+    Route an incoming payload to every asyncio.Queue subscribed to a
+    given ``(Channel, entity_id)`` pair.
+
+This module intentionally does NOT contain:
+    - The pg_notify LISTEN loop  →  see ``services/listener.py``
+    - The outbox fallback poller →  see ``services/outbox_poller.py``
+    - DB queries or enrichment   →  see ``services/enricher.py``
+
+Architecture note:
+    The broadcaster is keyed by ``(Channel, entity_id)`` rather than by
+    separate ``adjuster_id`` / ``incident_id`` dicts.  Adding a new
+    subscription type (e.g. ``Channel.REGION``) requires only a new
+    ``Channel`` enum value — no changes here.
+
+Example:
+    >>> broadcaster = NotificationBroadcaster()
+    >>> queue = broadcaster.subscribe(Channel.ADJUSTER, adjuster_id)
+    >>> await broadcaster.broadcast(Channel.ADJUSTER, adjuster_id, payload)
+    >>> broadcaster.unsubscribe(Channel.ADJUSTER, adjuster_id, queue)
+"""
 
 from __future__ import annotations
 
 import asyncio
-import json
-import logging
-import socket
 
-import asyncpg
-from fastapi import FastAPI
+from ..core.logging import get_logger
+from ..domain.channels import Channel
 
-from ..core.config import settings
-from ..core.database import async_session_maker
-from ..repositories.assignment_event_repository import AssignmentEventRepository
-
-logger = logging.getLogger(__name__)
-
-CHANNEL = "assignment_events"
-_HOSTNAME = socket.gethostname()
-_OUTBOX_POLL_INTERVAL = 30  # seconds
+logger = get_logger(__name__)
 
 
 class NotificationBroadcaster:
-    """
-    SSE subscriber queues — indexed by adjuster_id AND incident_id.
+    """Routes notification payloads to per-subscriber asyncio queues.
 
-    Adjuster streams: subscribe(adjuster_id=X)
-    Reporter streams: subscribe(incident_id=X)
+    Each connected SSE client owns one ``asyncio.Queue``.  The broadcaster
+    keeps a ``dict[(Channel, entity_id) -> set[Queue]]`` so that a single
+    ``broadcast()`` call fans out to all clients watching the same entity.
 
-    broadcast() routes to both buckets automatically using the payload fields.
+    Thread-safety: designed for a single-process asyncio event loop.
+    All methods are safe to call from coroutines without locking.
     """
 
     def __init__(self) -> None:
-        self._by_adjuster: dict[int, set[asyncio.Queue[dict]]] = {}
-        self._by_incident: dict[int, set[asyncio.Queue[dict]]] = {}
+        self._subscribers: dict[tuple[Channel, int], set[asyncio.Queue[dict]]] = {}
 
-    def subscribe(
-        self,
-        *,
-        adjuster_id: int | None = None,
-        incident_id: int | None = None,
-    ) -> asyncio.Queue[dict]:
-        if adjuster_id is None and incident_id is None:
-            raise ValueError("adjuster_id or incident_id required")
+    # ── Subscription lifecycle ────────────────────────────────────────────────
+
+    def subscribe(self, channel: Channel, entity_id: int) -> asyncio.Queue[dict]:
+        """Register a new subscriber and return its dedicated queue.
+
+        Args:
+            channel: The channel dimension to subscribe on.
+            entity_id: The specific entity ID to watch (adjuster PK, incident PK, …).
+
+        Returns:
+            A fresh ``asyncio.Queue`` that will receive payloads broadcast
+            to ``(channel, entity_id)``.
+        """
         queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=50)
-        if adjuster_id is not None:
-            self._by_adjuster.setdefault(adjuster_id, set()).add(queue)
-            logger.debug("SSE subscriber added for adjuster %d", adjuster_id)
-        if incident_id is not None:
-            self._by_incident.setdefault(incident_id, set()).add(queue)
-            logger.debug("SSE subscriber added for incident %d", incident_id)
+        key = (channel, entity_id)
+        self._subscribers.setdefault(key, set()).add(queue)
+        logger.debug("SSE subscriber added — channel=%s entity_id=%d", channel.value, entity_id)
         return queue
 
     def unsubscribe(
         self,
+        channel: Channel,
+        entity_id: int,
         queue: asyncio.Queue[dict],
-        *,
-        adjuster_id: int | None = None,
-        incident_id: int | None = None,
     ) -> None:
-        if adjuster_id is not None:
-            bucket = self._by_adjuster.get(adjuster_id)
-            if bucket:
-                bucket.discard(queue)
-                if not bucket:
-                    del self._by_adjuster[adjuster_id]
-            logger.debug("SSE subscriber removed for adjuster %d", adjuster_id)
-        if incident_id is not None:
-            bucket = self._by_incident.get(incident_id)
-            if bucket:
-                bucket.discard(queue)
-                if not bucket:
-                    del self._by_incident[incident_id]
-            logger.debug("SSE subscriber removed for incident %d", incident_id)
+        """Remove a subscriber queue.
 
-    async def broadcast(self, adjuster_id: int, payload: dict) -> None:
-        incident_id: int | None = payload.get("incident_id")
-        targets: list[asyncio.Queue[dict]] = [
-            *self._by_adjuster.get(adjuster_id, set()),
-            *(self._by_incident.get(incident_id, set()) if incident_id else []),
-        ]
+        Safe to call even if the queue is no longer registered (no-op).
+
+        Args:
+            channel: Channel the queue was subscribed to.
+            entity_id: Entity ID the queue was subscribed to.
+            queue: The queue instance returned by :meth:`subscribe`.
+        """
+        key = (channel, entity_id)
+        bucket = self._subscribers.get(key)
+        if bucket:
+            bucket.discard(queue)
+            if not bucket:
+                del self._subscribers[key]
+        logger.debug("SSE subscriber removed — channel=%s entity_id=%d", channel.value, entity_id)
+
+    # ── Broadcasting ─────────────────────────────────────────────────────────
+
+    async def broadcast(
+        self,
+        channel: Channel,
+        entity_id: int,
+        payload: dict,
+    ) -> None:
+        """Deliver a payload to all queues subscribed to ``(channel, entity_id)``.
+
+        Queues that are full receive a warning log and the event is dropped
+        for that subscriber only — other subscribers are unaffected.
+
+        Args:
+            channel: Target channel.
+            entity_id: Target entity ID.
+            payload: Raw dict to deliver (typically the pg_notify JSON payload).
+        """
+        key = (channel, entity_id)
+        targets = list(self._subscribers.get(key, set()))
         for queue in targets:
             try:
                 queue.put_nowait(payload)
             except asyncio.QueueFull:
                 logger.warning(
-                    "Queue full for adjuster %d / incident %s — dropping event",
-                    adjuster_id,
-                    incident_id,
+                    "Queue full — dropping event for channel=%s entity_id=%d",
+                    channel.value,
+                    entity_id,
                 )
 
+    async def broadcast_to_all_channels(
+        self,
+        adjuster_id: int,
+        incident_id: int | None,
+        payload: dict,
+    ) -> None:
+        """Convenience: broadcast to both ADJUSTER and INCIDENT channels.
 
+        Called by the pg_notify listener and the outbox poller, which receive
+        a single payload and need to fan it out to all relevant subscribers.
+
+        Args:
+            adjuster_id: Routes to ``Channel.ADJUSTER`` subscribers.
+            incident_id: Routes to ``Channel.INCIDENT`` subscribers if not None.
+            payload: Payload dict to deliver to all matching queues.
+        """
+        await self.broadcast(Channel.ADJUSTER, adjuster_id, payload)
+        if incident_id is not None:
+            await self.broadcast(Channel.INCIDENT, incident_id, payload)
+
+
+# Singleton instance — created by main.py lifespan and shared across modules.
 broadcaster = NotificationBroadcaster()
-_listener_conn: asyncpg.Connection | None = None
-_listener_task: asyncio.Task | None = None
-_outbox_task: asyncio.Task | None = None
-
-
-async def _listen_loop(dsn: str) -> None:
-    global _listener_conn
-    backoff = 1
-
-    while True:
-        try:
-            _listener_conn = await asyncpg.connect(dsn)
-            backoff = 1
-
-            async def on_notification(
-                conn: asyncpg.Connection,
-                pid: int,
-                channel: str,
-                payload: str,
-            ) -> None:
-                try:
-                    data = json.loads(payload)
-                    adjuster_id = int(data["adjuster_id"])
-                    await broadcaster.broadcast(adjuster_id, data)
-                except Exception:
-                    logger.exception("Error processing pg_notify payload: %s", payload)
-
-            await _listener_conn.add_listener(CHANNEL, on_notification)
-            logger.info("pg_notify LISTEN established on channel '%s'", CHANNEL)
-
-            while not _listener_conn.is_closed():
-                await asyncio.sleep(30)
-
-        except asyncio.CancelledError:
-            break
-        except Exception:
-            logger.exception("pg_notify listener error; reconnecting in %ds", backoff)
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 60)
-        finally:
-            if _listener_conn and not _listener_conn.is_closed():
-                await _listener_conn.close()
-            _listener_conn = None
-
-
-async def _outbox_poll_loop() -> None:
-    """Periodically drain unprocessed outbox events and broadcast them via SSE."""
-    while True:
-        try:
-            await asyncio.sleep(_OUTBOX_POLL_INTERVAL)
-            async with async_session_maker() as session:
-                repo = AssignmentEventRepository(session)
-                async with session.begin():
-                    events = await repo.get_unprocessed()
-                    if not events:
-                        continue
-                    processed_ids: list[int] = []
-                    for event in events:
-                        try:
-                            payload = (
-                                event.payload
-                                if isinstance(event.payload, dict)
-                                else json.loads(event.payload)
-                            )
-                            await broadcaster.broadcast(event.adjuster_id, payload)
-                            processed_ids.append(event.id)
-                        except Exception:
-                            logger.exception("Outbox: failed to broadcast event id=%d", event.id)
-                    if processed_ids:
-                        await repo.mark_processed(processed_ids, _HOSTNAME)
-                        logger.info("Outbox: broadcast and marked %d events", len(processed_ids))
-        except asyncio.CancelledError:
-            break
-        except Exception:
-            logger.exception("Outbox poller error; will retry in %ds", _OUTBOX_POLL_INTERVAL)
-
-
-async def start_listener(app: FastAPI) -> None:
-    global _listener_task, _outbox_task
-    dsn = str(settings.DATABASE_URL).replace("postgresql+asyncpg://", "postgresql://")
-    _listener_task = asyncio.create_task(_listen_loop(dsn), name="pg_notify_listener")
-    _outbox_task = asyncio.create_task(_outbox_poll_loop(), name="outbox_poller")
-    logger.info("pg_notify listener and outbox poller tasks started")
-
-
-async def stop_listener(app: FastAPI) -> None:
-    global _listener_task, _listener_conn, _outbox_task
-    for task in (_listener_task, _outbox_task):
-        if task:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-    _listener_task = None
-    _outbox_task = None
-    if _listener_conn and not _listener_conn.is_closed():
-        await _listener_conn.close()
-    logger.info("pg_notify listener and outbox poller stopped")
