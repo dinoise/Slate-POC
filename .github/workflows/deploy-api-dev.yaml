@@ -66,6 +66,9 @@ jobs:
         DATABASE_URL=poc-database-dev-url:latest
         GOOGLE_CLIENT_ID=poc-api-dev-google-client-id:latest
         CORS_ORIGINS=poc-api-dev-cors-origins:latest
+        GOOGLE_ROUTES_API_KEY=poc-api-dev-google-routes-key:latest
+      cloudrun-env-vars: |
+        TRAFFIC_PROVIDER=google
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
