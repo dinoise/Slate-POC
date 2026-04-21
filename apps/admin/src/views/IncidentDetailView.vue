@@ -17,6 +17,20 @@ const incident = ref<Incident | null>(null)
 const assignments = ref<Assignment[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const cancelling = ref(false)
+
+async function cancelIncident() {
+  if (!incident.value) return
+  cancelling.value = true
+  error.value = null
+  try {
+    await incidentsApi.delete(incident.value.id)
+    router.push('/incidents')
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Error al cancelar incidente'
+    cancelling.value = false
+  }
+}
 
 const ASSIGNMENT_STEPS: Assignment['status'][] = [
   'assigned', 'accepted', 'en_route', 'arrived', 'completed',
@@ -74,6 +88,15 @@ onMounted(async () => {
         severity="secondary"
         text
         @click="router.push('/incidents')"
+      />
+      <Button
+        v-if="incident && !['cancelled', 'completed'].includes(incident.status)"
+        icon="pi pi-times-circle"
+        label="Cancelar incidente"
+        severity="danger"
+        :loading="cancelling"
+        class="ml-auto"
+        @click="cancelIncident"
       />
     </div>
 
@@ -207,6 +230,7 @@ onMounted(async () => {
 .detail-toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
 }
 
 .detail-header {
