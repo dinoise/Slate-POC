@@ -169,11 +169,11 @@ class AssignmentService:
             await self.adjuster_repository.update(
                 assignment.adjuster_id, status=AdjusterStatus.AVAILABLE
             )
-            # Only reset incident to pending if it hasn't been cancelled by the reporter
+            # Cancel the incident too — prevents it from re-entering the optimizer queue
             incident = await self.incident_repository.get_by_id(assignment.incident_id)
             if incident and incident.status != IncidentStatus.CANCELLED:
                 await self.incident_repository.update(
-                    assignment.incident_id, status=IncidentStatus.PENDING
+                    assignment.incident_id, status=IncidentStatus.CANCELLED
                 )
 
         elif data.status == AssignmentStatus.COMPLETED:
