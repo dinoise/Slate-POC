@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     # Internal workspace packages
     "slate-core",
+    "slate-infra",
     # FastAPI Core
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.27.0",
@@ -49,3 +50,9 @@ packages = ["src/slate_api"]
 
 [tool.uv.sources]
 slate-core = { workspace = true }
+slate-infra = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "testcontainers[postgres]>=4.14.2",
+]

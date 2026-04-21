@@ -3,8 +3,8 @@
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import api
-from tests.factories import create_adjuster
+from .conftest import api
+from .factories import create_adjuster
 
 _BASE = api("/adjusters")
 

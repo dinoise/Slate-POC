@@ -7,7 +7,9 @@ from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .core import close_db, get_logger, init_db, settings, setup_logging, verify_google_token
+from slate_infra.auth import make_verify_google_token, verify_google_token
+
+from .core import close_db, get_logger, init_db, settings, setup_logging
 from .core.exceptions import AppException
 from .core.provider_registry import init_provider
 from .routes import (
@@ -24,6 +26,9 @@ from .routes import (
 # Setup logging
 setup_logging()
 logger = get_logger(__name__)
+
+# Wire up Google auth dependency with this service's client IDs
+app_verify_google_token = make_verify_google_token(client_ids=settings.google_client_ids)
 
 
 @asynccontextmanager
@@ -56,6 +61,9 @@ app = FastAPI(
     docs_url="/docs" if settings.is_local else None,
     redoc_url="/redoc" if settings.is_local else None,
 )
+
+# Register Google auth dependency with this service's client IDs
+app.dependency_overrides[verify_google_token] = app_verify_google_token
 
 # Add CORS middleware
 app.add_middleware(

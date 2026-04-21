@@ -3,45 +3,37 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from pydantic import PostgresDsn
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
 
+from slate_infra.config import BaseAppSettings
+
+# Resolve .env files relative to the service root — works regardless of CWD.
+# Path: src/slate_notifications/core/config.py → parents[3] = services/notifications/
+_SERVICE_ROOT = Path(__file__).parents[3]
 _ENV = os.getenv("ENVIRONMENT", "development")
 _ENV_FILES: dict[str, tuple[str, ...]] = {
-    "development": (".env",),
-    "test": (".env.test",),
+    "development": (str(_SERVICE_ROOT / ".env"),),
+    "test": (str(_SERVICE_ROOT / ".env.test"),),
 }
 
 
-class Settings(BaseSettings):
+class Settings(BaseAppSettings):
+    """Notifications-specific settings."""
+
     model_config = SettingsConfigDict(
         env_file=_ENV_FILES.get(_ENV, ()),
         env_file_encoding="utf-8",
+        case_sensitive=False,
         extra="ignore",
     )
 
     PROJECT_NAME: str = "slate-notifications"
     VERSION: str = "0.1.0"
-    LOG_LEVEL: str = "INFO"
-    ENVIRONMENT: str = "development"
 
     DATABASE_URL: PostgresDsn
-
-    # Comma-separated origins — "*" allows all in dev
-    CORS_ORIGINS: str = "*"
-
-    # Google OAuth — Client ID para verificar tokens de GIS del frontend
-    # Si está vacío, la verificación se omite (útil para tests y dev local)
-    GOOGLE_CLIENT_ID: str = ""
-
-    @property
-    def cors_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
-
-    @property
-    def google_client_ids(self) -> list[str]:
-        return [c.strip() for c in self.GOOGLE_CLIENT_ID.split(",") if c.strip()]
 
 
 settings = Settings()

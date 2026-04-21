@@ -5,8 +5,8 @@ from datetime import UTC
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import api
-from tests.factories import create_adjuster, create_assignment, create_incident, create_user
+from .conftest import api
+from .factories import create_adjuster, create_assignment, create_incident, create_user
 
 _BASE = api("/incidents")
 
