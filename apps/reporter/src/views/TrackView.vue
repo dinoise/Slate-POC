@@ -4,10 +4,12 @@ import { useRoute as useVueRoute, useRouter } from 'vue-router'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useReporterSessionStore } from '@/stores/reporterSession'
-import { useIncidentSSE } from '@slate/composables'
+import { useIncidentSSE, useRoute } from '@slate/composables'
 import { adjustersApi } from '@slate/api-client'
 import type { Adjuster } from '@slate/types'
 import { AssignmentStatus, TERMINAL_ASSIGNMENT_STATUSES } from '@slate/types'
+
+const { decodePolyline } = useRoute()
 
 const vueRoute = useVueRoute()
 const router = useRouter()
@@ -21,6 +23,19 @@ const { event: sseEvent, connected } = useIncidentSSE(incidentId)
 watch(sseEvent, (ev) => {
   if (!ev) return
   store.applySSEEvent(ev)
+
+  // Draw route from SSE polyline (already decoded by notifications enricher)
+  if (ev.route_polyline && map) {
+    drawPolyline(decodePolyline(ev.route_polyline))
+  }
+
+  // Clear route and adjuster marker on terminal status
+  if (ev.status === AssignmentStatus.CANCELLED || ev.status === AssignmentStatus.COMPLETED) {
+    if (map) {
+      if (routeLine) { map.removeLayer(routeLine); routeLine = null }
+      if (adjusterMarker) { map.removeLayer(adjusterMarker); adjusterMarker = null }
+    }
+  }
 })
 
 // ── Map ───────────────────────────────────────────────────────────────────────
@@ -80,6 +95,14 @@ watch(
 
 watch(() => store.incident, () => updateMap())
 
+function drawPolyline(coords: [number, number][]) {
+  if (!map || coords.length < 2) return
+  if (routeLine) { map.removeLayer(routeLine); routeLine = null }
+  routeLine = L.polyline(coords, { color: '#f59e0b', weight: 4, opacity: 0.85 }).addTo(map)
+  const bounds = routeLine.getBounds()
+  if (bounds.isValid()) map.fitBounds(bounds, { padding: [60, 60] })
+}
+
 function updateMap() {
   if (!map) return
   const inc = store.incident
@@ -103,8 +126,11 @@ function updateMap() {
       .bindTooltip(`${adj.first_name} ${adj.last_name}`, { permanent: false })
       .addTo(map)
 
-    if (inc) {
-      if (routeLine) map.removeLayer(routeLine)
+    // Draw polyline from stored assignment if available, else straight dashed fallback
+    if (asgn.route_polyline) {
+      drawPolyline(decodePolyline(asgn.route_polyline))
+    } else if (inc && !routeLine) {
+      // Fallback straight line only if no polyline has been drawn yet
       routeLine = L.polyline(
         [[adjLat, adjLon], [inc.latitude, inc.longitude]],
         { color: '#f59e0b', weight: 2, dashArray: '6 8', opacity: 0.7 },
