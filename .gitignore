@@ -35,6 +35,9 @@ apps/*/.env*
 services/*/.env
 services/*/.env.*
 !services/*/.env.example
+alembic/.env
+alembic/.env.*
+!alembic/.env.example
 
 # ── Datos y modelos ML ────────────────────────────────────────────────────────
 data/osrm/

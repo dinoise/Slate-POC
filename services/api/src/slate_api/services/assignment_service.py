@@ -12,7 +12,7 @@ from slate_core.optimization import assignment_solver
 from ..core.enums import AdjusterStatus, AssignmentStatus, IncidentStatus
 from ..core.exceptions import NotFoundError, ServiceUnavailableError, ValidationError
 from ..core.logging import get_logger
-from ..models import Assignment
+from ..models import Assignment, AssignmentStatusHistory
 from ..repositories.adjuster_repository import AdjusterRepository
 from ..repositories.assignment_repository import AssignmentRepository
 from ..repositories.incident_repository import IncidentRepository
@@ -189,6 +189,20 @@ class AssignmentService:
     ) -> list[Assignment]:
         """Get assignments for an adjuster."""
         return await self.repository.get_by_adjuster(adjuster_id, limit)
+
+    async def get_assignment_history(
+        self,
+        assignment_id: int,
+    ) -> list[AssignmentStatusHistory]:
+        """Return the status-change audit trail for an assignment.
+
+        Raises:
+            NotFoundError: If the assignment does not exist.
+        """
+        assignment = await self.repository.get(assignment_id)
+        if not assignment:
+            raise NotFoundError(f"Assignment with id {assignment_id} not found")
+        return await self.repository.get_status_history(assignment_id)
 
     async def compute_route(
         self,

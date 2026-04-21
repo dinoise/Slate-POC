@@ -12,7 +12,7 @@ import NewAssignmentBanner from '@/components/NewAssignmentBanner.vue'
 import type { AssignmentEvent } from '@slate/types'
 
 const store = useAdjusterSessionStore()
-const { buildRouteLayer, removeRouteLayer, fetchRoute } = useRoute()
+const { buildRouteLayer, removeRouteLayer, fetchRoute, routeFromPayload } = useRoute()
 
 // ── Map ───────────────────────────────────────────────────────────────────────
 const mapContainer = ref<HTMLElement>()
@@ -170,7 +170,18 @@ watch(events, async (evts) => {
     const adjLat = adj?.current_latitude ?? adj?.home_latitude
     const adjLon = adj?.current_longitude ?? adj?.home_longitude
     if (adjLat && adjLon) {
-      await drawRoute(adjLat, adjLon, ev.latitude, ev.longitude)
+      if (ev.route_polyline) {
+        // Fast path: polyline already embedded in the SSE payload — no extra fetch needed
+        if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+        const result = routeFromPayload(ev.route_polyline, ev.route_distance_m, ev.route_duration_s)
+        routeLayer = buildRouteLayer(L, result.coords, result.traffic_segments, routeColorIndex++)
+        routeLayer!.addTo(map)
+        const bounds = (routeLayer as L.Polyline).getBounds?.()
+        if (bounds?.isValid()) map.fitBounds(bounds, { padding: [40, 40] })
+      } else {
+        // Fallback: route not yet fetched — call route API
+        await drawRoute(adjLat, adjLon, ev.latitude, ev.longitude)
+      }
     }
   }
 

@@ -5,15 +5,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import socket
 
 import asyncpg
 from fastapi import FastAPI
 
 from ..core.config import settings
+from ..core.database import async_session_maker
+from ..repositories.assignment_event_repository import AssignmentEventRepository
 
 logger = logging.getLogger(__name__)
 
 CHANNEL = "assignment_events"
+_HOSTNAME = socket.gethostname()
+_OUTBOX_POLL_INTERVAL = 30  # seconds
 
 
 class NotificationBroadcaster:
@@ -53,6 +58,7 @@ class NotificationBroadcaster:
 broadcaster = NotificationBroadcaster()
 _listener_conn: asyncpg.Connection | None = None
 _listener_task: asyncio.Task | None = None
+_outbox_task: asyncio.Task | None = None
 
 
 async def _listen_loop(dsn: str) -> None:
@@ -95,22 +101,57 @@ async def _listen_loop(dsn: str) -> None:
             _listener_conn = None
 
 
+async def _outbox_poll_loop() -> None:
+    """Periodically drain unprocessed outbox events and broadcast them via SSE."""
+    while True:
+        try:
+            await asyncio.sleep(_OUTBOX_POLL_INTERVAL)
+            async with async_session_maker() as session:
+                repo = AssignmentEventRepository(session)
+                async with session.begin():
+                    events = await repo.get_unprocessed()
+                    if not events:
+                        continue
+                    processed_ids: list[int] = []
+                    for event in events:
+                        try:
+                            payload = (
+                                event.payload
+                                if isinstance(event.payload, dict)
+                                else json.loads(event.payload)
+                            )
+                            await broadcaster.broadcast(event.adjuster_id, payload)
+                            processed_ids.append(event.id)
+                        except Exception:
+                            logger.exception("Outbox: failed to broadcast event id=%d", event.id)
+                    if processed_ids:
+                        await repo.mark_processed(processed_ids, _HOSTNAME)
+                        logger.info("Outbox: broadcast and marked %d events", len(processed_ids))
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("Outbox poller error; will retry in %ds", _OUTBOX_POLL_INTERVAL)
+
+
 async def start_listener(app: FastAPI) -> None:
-    global _listener_task
+    global _listener_task, _outbox_task
     dsn = str(settings.DATABASE_URL).replace("postgresql+asyncpg://", "postgresql://")
     _listener_task = asyncio.create_task(_listen_loop(dsn), name="pg_notify_listener")
-    logger.info("pg_notify listener task started")
+    _outbox_task = asyncio.create_task(_outbox_poll_loop(), name="outbox_poller")
+    logger.info("pg_notify listener and outbox poller tasks started")
 
 
 async def stop_listener(app: FastAPI) -> None:
-    global _listener_task, _listener_conn
-    if _listener_task:
-        _listener_task.cancel()
-        try:
-            await _listener_task
-        except asyncio.CancelledError:
-            pass
-        _listener_task = None
+    global _listener_task, _listener_conn, _outbox_task
+    for task in (_listener_task, _outbox_task):
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+    _listener_task = None
+    _outbox_task = None
     if _listener_conn and not _listener_conn.is_closed():
         await _listener_conn.close()
-    logger.info("pg_notify listener stopped")
+    logger.info("pg_notify listener and outbox poller stopped")

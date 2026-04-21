@@ -3,6 +3,7 @@ import type {
   Adjuster,
   AdjusterCreate,
   Assignment,
+  AssignmentStatusHistory,
   AdjusterPosition,
   DemandPrediction,
   DemandSlot,
@@ -95,6 +96,8 @@ export const assignmentsApi = {
     apiFetch<Assignment[]>(`/api/v1/assignments/by-incident/${incidentId}`),
   byAdjuster: (adjusterId: number) =>
     apiFetch<Assignment[]>(`/api/v1/assignments/by-adjuster/${adjusterId}`),
+  history: (id: number) =>
+    apiFetch<AssignmentStatusHistory[]>(`/api/v1/assignments/${id}/history`),
 }
 
 // ── Adjuster Positions ────────────────────────────────────────────────────────

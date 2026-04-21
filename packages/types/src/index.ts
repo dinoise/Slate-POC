@@ -84,8 +84,22 @@ export interface Assignment {
   actual_arrival_time: string | null
   completed_at: string | null
   notes: string | null
+  // Route data — populated after route-fetching job runs
+  route_polyline: string | null
+  route_provider: string | null
+  route_distance_m: number | null
+  route_duration_s: number | null
   created_at: string
   updated_at: string
+}
+
+export interface AssignmentStatusHistory {
+  id: number
+  assignment_id: number
+  from_status: AssignmentStatus | null
+  to_status: AssignmentStatus
+  changed_at: string
+  changed_by: string | null
 }
 
 export interface AdjusterPosition {
@@ -153,6 +167,11 @@ export interface AssignmentEvent {
   travel_time_minutes: number | null
   status: AssignmentStatus
   assigned_at: string
+  // Route fields — present once route-fetching job has run
+  route_polyline: string | null
+  route_provider: string | null
+  route_distance_m: number | null
+  route_duration_s: number | null
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────

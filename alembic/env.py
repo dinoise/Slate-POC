@@ -1,8 +1,14 @@
 """Alembic environment configuration for async migrations."""
 
 import asyncio
-import os
+
+# Solo importamos Base (modelos) — no instanciamos Settings completo.
+# DATABASE_URL se valida via alembic/config.py (pydantic-settings).
+# Carga alembic/.env como fallback; si DATABASE_URL ya está en el shell
+# (CI/CD, Docker) pydantic la toma del entorno y el .env se ignora.
+import sys
 from logging.config import fileConfig
+from pathlib import Path as _Path
 
 from geoalchemy2 import alembic_helpers
 from sqlalchemy import pool
@@ -11,12 +17,14 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# Solo importamos Base (modelos) — no instanciamos Settings completo.
-# DATABASE_URL se lee directamente de la variable de entorno para que
-# Alembic no dependa de REDIS_URL, SECRET_KEY ni ningún otro campo de app.
-from slate_api.models.base import Base
+# Add the alembic/ directory to sys.path so that our local settings.py
+# can be imported without colliding with the installed alembic package.
+sys.path.insert(0, str(_Path(__file__).parent))
+from settings import settings as alembic_settings  # noqa: E402
 
-_DATABASE_URL = os.environ["DATABASE_URL"]  # falla rápido si no está definida
+from slate_core.models.base import Base
+
+_DATABASE_URL = alembic_settings.DATABASE_URL
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

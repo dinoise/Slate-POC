@@ -6,71 +6,48 @@ import asyncio
 import json
 import logging
 
-import asyncpg
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.auth import verify_google_token
-from ..core.config import settings
+from ..core.database import get_db
+from ..repositories.assignment_repository import AssignmentRepository, EnrichedAssignment
 from ..services.broadcaster import broadcaster
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 logger = logging.getLogger(__name__)
 
-_ENRICH_QUERY = """
-    SELECT
-        a.id            AS assignment_id,
-        a.adjuster_id,
-        a.incident_id,
-        a.status,
-        a.distance_km,
-        a.travel_time_minutes,
-        a.assigned_at,
-        i.incident_type,
-        i.severity,
-        i.description,
-        i.address,
-        i.latitude,
-        i.longitude
-    FROM assignments a
-    JOIN incidents   i ON i.id = a.incident_id
-    WHERE a.id = $1
-"""
 
+async def _enrich(payload: dict, db: AsyncSession) -> dict:
+    """Join assignment + incident data for the SSE payload using SQLAlchemy ORM.
 
-async def _enrich(payload: dict) -> dict:
-    """
-    Join assignment + incident data for the SSE payload.
-
-    Uses a short-lived asyncpg connection — we intentionally avoid SQLAlchemy
-    here to keep this service dependency-free from the ORM layer.
     Falls back to the raw payload if the DB lookup fails.
     """
-    dsn = str(settings.DATABASE_URL).replace("postgresql+asyncpg://", "postgresql://")
     try:
-        conn = await asyncpg.connect(dsn)
-        try:
-            row = await conn.fetchrow(_ENRICH_QUERY, int(payload["assignment_id"]))
-        finally:
-            await conn.close()
-
-        if not row:
+        repo = AssignmentRepository(db)
+        enriched: EnrichedAssignment | None = await repo.get_enriched(int(payload["assignment_id"]))
+        if enriched is None:
             return payload
 
         return {
-            "assignment_id": row["assignment_id"],
-            "adjuster_id": row["adjuster_id"],
-            "incident_id": row["incident_id"],
-            "status": row["status"],
-            "distance_km": float(row["distance_km"]) if row["distance_km"] else None,
-            "travel_time_minutes": row["travel_time_minutes"],
-            "assigned_at": row["assigned_at"].isoformat() if row["assigned_at"] else None,
-            "incident_type": row["incident_type"],
-            "severity": row["severity"],
-            "description": row["description"],
-            "address": row["address"],
-            "latitude": float(row["latitude"]) if row["latitude"] else None,
-            "longitude": float(row["longitude"]) if row["longitude"] else None,
+            "assignment_id": enriched.assignment_id,
+            "adjuster_id": enriched.adjuster_id,
+            "incident_id": enriched.incident_id,
+            "status": enriched.status,
+            "distance_km": enriched.distance_km,
+            "travel_time_minutes": enriched.travel_time_minutes,
+            "assigned_at": enriched.assigned_at.isoformat() if enriched.assigned_at else None,
+            "route_polyline": enriched.route_polyline,
+            "route_provider": enriched.route_provider,
+            "route_distance_m": enriched.route_distance_m,
+            "route_duration_s": enriched.route_duration_s,
+            "incident_type": enriched.incident_type,
+            "severity": enriched.severity,
+            "description": enriched.description,
+            "address": enriched.address,
+            "latitude": enriched.latitude,
+            "longitude": enriched.longitude,
         }
     except Exception:
         logger.exception(
@@ -83,6 +60,7 @@ async def _enrich(payload: dict) -> dict:
 @router.get("/stream", dependencies=[Depends(verify_google_token)])
 async def notification_stream(
     request: Request,
+    db: AsyncSession = Depends(get_db),
     adjuster_id: int = Query(..., gt=0, description="Adjuster ID to subscribe to"),
 ) -> StreamingResponse:
     """SSE stream for a specific adjuster."""
@@ -96,7 +74,7 @@ async def notification_stream(
                     break
                 try:
                     payload = await asyncio.wait_for(queue.get(), timeout=15.0)
-                    enriched = await _enrich(payload)
+                    enriched = await _enrich(payload, db)
                     yield f"event: assignment\ndata: {json.dumps(enriched)}\n\n"
                 except TimeoutError:
                     yield ": keepalive\n\n"

@@ -102,15 +102,31 @@ async function cancel() {
         <span class="text-body-2">{{ incidentAddress }}</span>
       </div>
 
-      <!-- Distance / ETA -->
+      <!-- Distance / ETA — prefer precise route data when available -->
       <div class="d-flex gap-3 mb-3">
-        <div v-if="assignment.distance_km" class="text-caption text-medium-emphasis">
+        <div
+          v-if="assignment.route_distance_m ?? assignment.distance_km"
+          class="text-caption text-medium-emphasis"
+        >
           <v-icon size="14">mdi-road-variant</v-icon>
-          {{ assignment.distance_km?.toFixed(1) }} km
+          <template v-if="assignment.route_distance_m">
+            {{ (assignment.route_distance_m / 1000).toFixed(1) }} km
+          </template>
+          <template v-else>
+            {{ assignment.distance_km?.toFixed(1) }} km
+          </template>
         </div>
-        <div v-if="assignment.travel_time_minutes" class="text-caption text-medium-emphasis">
+        <div
+          v-if="assignment.route_duration_s ?? assignment.travel_time_minutes"
+          class="text-caption text-medium-emphasis"
+        >
           <v-icon size="14">mdi-clock-outline</v-icon>
-          {{ assignment.travel_time_minutes }} min
+          <template v-if="assignment.route_duration_s">
+            {{ Math.round(assignment.route_duration_s / 60) }} min
+          </template>
+          <template v-else>
+            {{ assignment.travel_time_minutes }} min
+          </template>
         </div>
       </div>
 

@@ -56,8 +56,27 @@ class AssignmentRead(AssignmentBase):
     travel_time_minutes: int | None
     optimization_score: float | None
     status: AssignmentStatus
+    # Route data (populated after route-fetching job runs)
+    route_polyline: str | None = None
+    route_provider: str | None = None
+    route_fetched_at: datetime | None = None
+    route_distance_m: int | None = None
+    route_duration_s: int | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class AssignmentStatusHistoryRead(BaseModel):
+    """Schema for reading a single status-history entry."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    assignment_id: int
+    from_status: AssignmentStatus | None
+    to_status: AssignmentStatus
+    changed_at: datetime
+    changed_by: str | None
 
 
 # ── Optimize endpoint schemas ────────────────────────────────────────────────

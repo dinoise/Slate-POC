@@ -9,6 +9,7 @@ from ..core.provider_registry import ProviderDep
 from ..schemas.assignment import (
     AssignmentCreate,
     AssignmentRead,
+    AssignmentStatusHistoryRead,
     AssignmentUpdate,
     OptimizeRequest,
     OptimizeResponse,
@@ -121,6 +122,20 @@ async def get_assignments_by_adjuster(
     """Get all assignments for a specific adjuster."""
     assignments = await service.get_assignments_by_adjuster(adjuster_id, limit)
     return [AssignmentRead.model_validate(asgn) for asgn in assignments]
+
+
+@router.get(
+    "/{assignment_id}/history",
+    response_model=list[AssignmentStatusHistoryRead],
+    summary="Get status history for an assignment",
+)
+async def get_assignment_history(
+    assignment_id: int,
+    service: AssignmentServiceDep,
+) -> list[AssignmentStatusHistoryRead]:
+    """Return the immutable audit trail of status transitions for an assignment."""
+    history = await service.get_assignment_history(assignment_id)
+    return [AssignmentStatusHistoryRead.model_validate(entry) for entry in history]
 
 
 @router.get(
