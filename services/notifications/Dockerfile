@@ -7,6 +7,7 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 COPY services/core/pyproject.toml services/core/pyproject.toml
+COPY services/shared-infra/pyproject.toml services/shared-infra/pyproject.toml
 COPY services/api/pyproject.toml services/api/pyproject.toml
 COPY services/notifications/pyproject.toml services/notifications/pyproject.toml
 COPY services/jobs/pyproject.toml services/jobs/pyproject.toml
@@ -15,6 +16,7 @@ RUN uv sync --package slate-notifications --no-dev --no-install-workspace
 
 COPY services/notifications/src ./services/notifications/src
 COPY services/core/src ./services/core/src
+COPY services/shared-infra/src ./services/shared-infra/src
 
 RUN uv sync --package slate-notifications --no-dev
 
@@ -26,11 +28,12 @@ WORKDIR /app
 COPY --from=builder /app/.venv ./.venv
 COPY --from=builder /app/services/notifications/src ./services/notifications/src
 COPY --from=builder /app/services/core/src ./services/core/src
+COPY --from=builder /app/services/shared-infra/src ./services/shared-infra/src
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH="/app/services/notifications/src:/app/services/core/src"
+    PYTHONPATH="/app/services/notifications/src:/app/services/core/src:/app/services/shared-infra/src"
 
 RUN useradd --no-create-home --shell /bin/false appuser
 USER appuser

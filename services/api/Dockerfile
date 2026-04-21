@@ -9,6 +9,7 @@ WORKDIR /app
 # Copiar archivos de workspace para que uv resuelva dependencias internas
 COPY pyproject.toml uv.lock ./
 COPY services/core/pyproject.toml services/core/pyproject.toml
+COPY services/shared-infra/pyproject.toml services/shared-infra/pyproject.toml
 COPY services/api/pyproject.toml services/api/pyproject.toml
 COPY services/notifications/pyproject.toml services/notifications/pyproject.toml
 COPY services/jobs/pyproject.toml services/jobs/pyproject.toml
@@ -20,6 +21,7 @@ RUN uv sync --package slate-api --no-dev --no-install-workspace
 # Copiar código fuente
 COPY services/api/src ./services/api/src
 COPY services/core/src ./services/core/src
+COPY services/shared-infra/src ./services/shared-infra/src
 
 # Instalar paquetes locales en el venv ya creado
 RUN uv sync --package slate-api --no-dev
@@ -38,12 +40,13 @@ WORKDIR /app
 COPY --from=builder /app/.venv ./.venv
 COPY --from=builder /app/services/api/src ./services/api/src
 COPY --from=builder /app/services/core/src ./services/core/src
+COPY --from=builder /app/services/shared-infra/src ./services/shared-infra/src
 
 # Variables de entorno
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH="/app/services/api/src:/app/services/core/src"
+    PYTHONPATH="/app/services/api/src:/app/services/core/src:/app/services/shared-infra/src"
 
 # Usuario no-root
 RUN useradd --no-create-home --shell /bin/false appuser
