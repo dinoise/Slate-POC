@@ -17,6 +17,7 @@ import type {
 // ── Auth token ────────────────────────────────────────────────────────────────
 
 let _authToken: string | null = null
+let _onUnauthorized: (() => void) | null = null
 
 export function setAuthToken(token: string | null): void {
   _authToken = token
@@ -24,6 +25,11 @@ export function setAuthToken(token: string | null): void {
 
 export function getAuthToken(): string | null {
   return _authToken
+}
+
+/** Register a callback invoked when any API request returns 401. */
+export function onUnauthorized(fn: () => void): void {
+  _onUnauthorized = fn
 }
 
 // ── Base fetch ────────────────────────────────────────────────────────────────
@@ -39,6 +45,9 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const res = await fetch(`${baseUrl}${path}`, { ...init, headers })
   if (!res.ok) {
+    if (res.status === 401) {
+      _onUnauthorized?.()
+    }
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'API error')
   }

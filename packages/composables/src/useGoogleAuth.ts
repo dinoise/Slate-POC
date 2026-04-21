@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { setAuthToken } from '@slate/api-client'
+import { setAuthToken, onUnauthorized } from '@slate/api-client'
 
 declare global {
   interface Window {
@@ -79,6 +79,18 @@ export function useGoogleAuth() {
   function initialize() {
     if (_initialized) return
     _initialized = true
+
+    // When any API request returns 401, clear the session and re-prompt
+    onUnauthorized(() => {
+      sessionStorage.removeItem('gid_token')
+      setAuthToken(null)
+      user.value = null
+      // Re-trigger One Tap — Google will silently re-issue if the user has an active session
+      if (window.google) {
+        window.google.accounts.id.prompt()
+        setTimeout(() => { if (!user.value) promptSuppressed.value = true }, 500)
+      }
+    })
 
     const clientId = (import.meta as ImportMeta & { env: { VITE_GOOGLE_CLIENT_ID: string } })
       .env.VITE_GOOGLE_CLIENT_ID
