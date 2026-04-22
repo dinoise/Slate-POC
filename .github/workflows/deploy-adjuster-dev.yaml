@@ -53,6 +53,7 @@ jobs:
       min-instances: 0
       max-instances: 2
       timeout: 60s
+      runtime-service-account: poc-adjuster@lennken-poc.iam.gserviceaccount.com
       allow-unauthenticated: true
       enable-iap: false
       skip-health-check: true
