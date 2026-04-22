@@ -66,10 +66,10 @@ jobs:
         GCS_BUCKET=lennken-poc-models
         MODEL_VERSION=v1.0.0
         HOURS_AHEAD=24
-      scheduler-name:             slate-demand-refresh-dev
-      scheduler-cron:             "0 2 * * *"
-      scheduler-timezone:         America/Mexico_City
-      scheduler-service-account:  poc-scheduler@lennken-poc.iam.gserviceaccount.com
+      # scheduler-name:             slate-demand-refresh-dev
+      # scheduler-cron:             "0 2 * * *"
+      # scheduler-timezone:         America/Mexico_City
+      # scheduler-service-account:  poc-scheduler@lennken-poc.iam.gserviceaccount.com
     secrets:
       project-id:                  ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider:  ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
