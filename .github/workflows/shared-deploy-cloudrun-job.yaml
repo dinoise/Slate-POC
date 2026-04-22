@@ -222,24 +222,24 @@ jobs:
         run: |
           JOB_URI="https://${{ inputs.region }}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ secrets.project-id }}/jobs/${{ inputs.job-name }}:run"
 
-          COMMON_FLAGS="
-            --location=${{ inputs.region }}
-            --schedule=${{ inputs.scheduler-cron }}
-            --time-zone=${{ inputs.scheduler-timezone }}
-            --uri=${JOB_URI}
-            --message-body={}
+          COMMON_FLAGS=(
+            --location="${{ inputs.region }}"
+            --schedule="${{ inputs.scheduler-cron }}"
+            --time-zone="${{ inputs.scheduler-timezone }}"
+            --uri="${JOB_URI}"
+            --message-body="{}"
             --http-method=POST
-            --oauth-service-account-email=${{ inputs.scheduler-service-account }}
-            --project=${{ secrets.project-id }}
-          "
+            --oauth-service-account-email="${{ inputs.scheduler-service-account }}"
+            --project="${{ secrets.project-id }}"
+          )
 
-          if gcloud scheduler jobs describe ${{ inputs.scheduler-name }} \
-               --location=${{ inputs.region }} \
-               --project=${{ secrets.project-id }} &>/dev/null; then
-            gcloud scheduler jobs update http ${{ inputs.scheduler-name }} ${COMMON_FLAGS}
+          if gcloud scheduler jobs describe "${{ inputs.scheduler-name }}" \
+               --location="${{ inputs.region }}" \
+               --project="${{ secrets.project-id }}" &>/dev/null; then
+            gcloud scheduler jobs update http "${{ inputs.scheduler-name }}" "${COMMON_FLAGS[@]}"
             echo "✅ Scheduler actualizado: ${{ inputs.scheduler-name }}"
           else
-            gcloud scheduler jobs create http ${{ inputs.scheduler-name }} ${COMMON_FLAGS}
+            gcloud scheduler jobs create http "${{ inputs.scheduler-name }}" "${COMMON_FLAGS[@]}"
             echo "✅ Scheduler creado: ${{ inputs.scheduler-name }}"
           fi
 
