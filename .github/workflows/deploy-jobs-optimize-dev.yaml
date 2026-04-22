@@ -58,7 +58,7 @@ jobs:
       cpu:                 "2"
       task-timeout:        7200s
       max-retries:         1
-      runtime-service-account: poc-jobs@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+      runtime-service-account: poc-jobs@lennken-poc.iam.gserviceaccount.com
       vpc-subnet:          poc-cloudrun-subnet
       cloudrun-secrets: |
         DATABASE_URL=poc-database-dev-url:latest
