@@ -6,6 +6,7 @@ import 'leaflet-ant-path'
 import { useSSE } from '@slate/composables'
 import { useRoute } from '@slate/composables'
 import { useAdjusterSessionStore } from '@/stores/adjusterSession'
+import { incidentsApi } from '@slate/api-client'
 import AdjusterSelector from '@/components/AdjusterSelector.vue'
 import AssignmentCard from '@/components/AssignmentCard.vue'
 import NewAssignmentBanner from '@/components/NewAssignmentBanner.vue'
@@ -111,18 +112,25 @@ const incidentMeta = ref<{
 watch(
   () => store.activeAssignment,
   async (assignment) => {
-    console.debug('[activeAssignment watcher] assignment:', JSON.stringify(assignment), '| incidentMeta:', JSON.stringify(incidentMeta.value))
     if (!map || !assignment) {
-      console.debug('[activeAssignment watcher] clearing map — assignment is null/no map')
       if (incidentMarker && map) { map.removeLayer(incidentMarker); incidentMarker = null }
       if (routeLayer && map) { removeRouteLayer(map, routeLayer); routeLayer = null }
       return
     }
-    // Assignment loaded from REST — incidentMeta may need fetching
-    // If already set via SSE event keep it; otherwise use what we have
+    // If incidentMeta is not yet populated (REST load, no SSE yet), fetch the incident
     if (!incidentMeta.value.lat) {
-      console.debug('[activeAssignment watcher] SKIPPED — incidentMeta.lat is null')
-      return
+      try {
+        const incident = await incidentsApi.get(assignment.incident_id)
+        incidentMeta.value = {
+          type: incident.incident_type,
+          address: incident.address,
+          lat: incident.latitude,
+          lon: incident.longitude,
+          severity: incident.severity,
+        }
+      } catch {
+        return
+      }
     }
 
     const adj = store.adjuster
@@ -162,25 +170,17 @@ const latestNewAssignmentEvent = ref<AssignmentEvent | null>(null)
 
 watch(events, async (evts) => {
   const ev = evts[0]
-  console.debug('[SSE watcher] raw evts[0]:', JSON.stringify(ev))
 
   // Guard: event must have real assignment data (not an empty reconnect artifact)
-  if (!ev || !ev.assignment_id) {
-    console.debug('[SSE watcher] SKIPPED — no assignment_id', ev)
-    return
-  }
-
-  console.debug('[SSE watcher] processing event', ev.assignment_id, 'status:', ev.status, 'event_type:', ev.event_type)
+  if (!ev || !ev.assignment_id) return
 
   // Reload store first so we know the real current state
   if (store.adjuster) {
     await store.loadActiveAssignment(store.adjuster.id)
-    console.debug('[SSE watcher] after loadActiveAssignment, activeAssignment:', JSON.stringify(store.activeAssignment))
   }
 
   // Terminal events (cancelled / completed): clear incident marker + route, keep adjuster marker
   if (ev.status === AssignmentStatus.CANCELLED || ev.status === AssignmentStatus.COMPLETED) {
-    console.debug('[SSE watcher] TERMINAL status — clearing map')
     if (map) {
       if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
       if (incidentMarker) { map.removeLayer(incidentMarker); incidentMarker = null }
@@ -191,7 +191,6 @@ watch(events, async (evts) => {
 
   // Show banner only for new assignments, not for status transitions on existing ones
   if (ev.event_type === 'assignment.created' || ev.status === AssignmentStatus.ASSIGNED) {
-    console.debug('[SSE watcher] showing new-assignment banner')
     latestNewAssignmentEvent.value = ev
   }
 
@@ -203,7 +202,6 @@ watch(events, async (evts) => {
     lon: ev.longitude ?? null,
     severity: typeof ev.severity === 'number' ? ev.severity : null,
   }
-  console.debug('[SSE watcher] incidentMeta set to:', JSON.stringify(incidentMeta.value))
 
   // Place marker and draw route
   if (!map) return
