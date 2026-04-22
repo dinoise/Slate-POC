@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseModel
@@ -73,6 +73,7 @@ class Assignment(BaseModel):
     )
     route_distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
     route_duration_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    route_traffic_segments: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     # Relationships
     incident: Mapped["Incident"] = relationship(

@@ -24,6 +24,7 @@ class EnrichedAssignment:
     route_provider: str | None
     route_distance_m: int | None
     route_duration_s: int | None
+    route_traffic_segments: list | None
     incident_type: str
     severity: int
     description: str | None
@@ -65,6 +66,7 @@ class AssignmentRepository:
             route_provider=assignment.route_provider,
             route_distance_m=assignment.route_distance_m,
             route_duration_s=assignment.route_duration_s,
+            route_traffic_segments=assignment.route_traffic_segments,
             incident_type=incident.incident_type,
             severity=incident.severity,
             description=incident.description,

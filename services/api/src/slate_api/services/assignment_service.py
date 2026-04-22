@@ -1,5 +1,6 @@
 """Business logic for Assignment operations."""
 
+import asyncio
 import time
 from datetime import datetime
 
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from slate_core.geospatial.base import RoutingProvider
 from slate_core.optimization import assignment_solver
 
+from ..core.database import async_session_maker
 from ..core.enums import AdjusterStatus, AssignmentStatus, IncidentStatus
 from ..core.exceptions import NotFoundError, ServiceUnavailableError, ValidationError
 from ..core.logging import get_logger
@@ -211,7 +213,7 @@ class AssignmentService:
         Raises:
             NotFoundError: If the assignment does not exist.
         """
-        assignment = await self.repository.get(assignment_id)
+        assignment = await self.repository.get_by_id(assignment_id)
         if not assignment:
             raise NotFoundError(f"Assignment with id {assignment_id} not found")
         return await self.repository.get_status_history(assignment_id)
@@ -249,6 +251,64 @@ class AssignmentService:
                 for s in result.traffic_segments
             ],
         )
+
+    @staticmethod
+    async def _fetch_and_save_route(
+        assignment_id: int,
+        adj_lat: float,
+        adj_lon: float,
+        inc_lat: float,
+        inc_lon: float,
+        provider: RoutingProvider,
+    ) -> None:
+        """Fire-and-forget: compute a route and persist it onto an assignment.
+
+        Owns its own DB session so it is fully decoupled from the optimizer's
+        request lifecycle (which has already committed by the time this runs).
+        """
+        try:
+            result = await provider.route(
+                origin=(adj_lat, adj_lon),
+                destination=(inc_lat, inc_lon),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Route fetch failed for assignment %d (provider=%s): %s",
+                assignment_id,
+                provider.provider_name,
+                exc,
+            )
+            return
+
+        traffic_segments: list | None = None
+        if provider.supports_traffic and result.traffic_segments:
+            traffic_segments = [
+                {
+                    "start_index": s.start_index,
+                    "end_index": s.end_index,
+                    "speed": s.speed,
+                }
+                for s in result.traffic_segments
+            ]
+
+        try:
+            async with async_session_maker() as db:
+                repo = AssignmentRepository(db)
+                await repo.save_route(
+                    assignment_id,
+                    polyline=result.polyline,
+                    provider=result.provider,
+                    distance_m=result.distance_m,
+                    duration_s=result.duration_s,
+                    traffic_segments=traffic_segments,
+                )
+                await db.commit()
+        except Exception as exc:
+            logger.warning(
+                "Could not persist route for assignment %d: %s",
+                assignment_id,
+                exc,
+            )
 
     async def optimize_assignments(
         self, request: OptimizeRequest, provider: RoutingProvider
@@ -303,6 +363,8 @@ class AssignmentService:
                 median_travel_min=0.0,
                 p90_travel_min=0.0,
                 solver_time_s=0.0,
+                routing_provider=provider.provider_name,
+                traffic_aware=False,
                 n_incidents=len(incidents),
                 n_adjusters=len(adjusters),
             )
@@ -399,6 +461,17 @@ class AssignmentService:
                 # Mark adjuster as busy
                 await self.adjuster_repository.update(
                     adjuster.adjuster_id, status=AdjusterStatus.BUSY
+                )
+                # Persist route geometry in the background — does not block the response
+                asyncio.create_task(
+                    self._fetch_and_save_route(
+                        db_id,
+                        adjuster.latitude,
+                        adjuster.longitude,
+                        incident.latitude,
+                        incident.longitude,
+                        provider,
+                    )
                 )
 
             optimized.append(

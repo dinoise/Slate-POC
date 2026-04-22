@@ -102,20 +102,24 @@ class AssignmentRepository(BaseRepository[Assignment]):
         provider: str,
         distance_m: int,
         duration_s: int,
+        traffic_segments: list | None = None,
     ) -> Assignment | None:
         """Persist route data onto an existing assignment.
 
         Args:
             assignment_id: Target assignment.
             polyline: Precision-5 encoded polyline.
-            provider: Routing provider name (e.g. "osrm", "valhalla").
+            provider: Routing provider name (e.g. "osrm", "google").
             distance_m: Route distance in metres.
             duration_s: Route duration in seconds.
+            traffic_segments: Optional list of speed-classified polyline
+                segments from a traffic-aware provider. Each entry is a dict
+                with keys start_index, end_index, speed.
 
         Returns:
             Updated Assignment, or None if not found.
         """
-        assignment = await self.get(assignment_id)
+        assignment = await self.get_by_id(assignment_id)
         if assignment is None:
             return None
         assignment.route_polyline = polyline
@@ -123,6 +127,7 @@ class AssignmentRepository(BaseRepository[Assignment]):
         assignment.route_distance_m = distance_m
         assignment.route_duration_s = duration_s
         assignment.route_fetched_at = datetime.now(UTC)
+        assignment.route_traffic_segments = traffic_segments or None
         await self.db.flush()
         return assignment
 

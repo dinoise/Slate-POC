@@ -135,11 +135,20 @@ watch(
       .bindTooltip(incidentMeta.value.type ?? 'Siniestro')
       .addTo(map)
 
-    // Draw route
+    // Draw route — prefer stored polyline to avoid an extra API call
     const adjLat = adj.current_latitude ?? adj.home_latitude
     const adjLon = adj.current_longitude ?? adj.home_longitude
     if (adjLat && adjLon) {
-      await drawRoute(adjLat, adjLon, lat, lon)
+      if (assignment.route_polyline) {
+        if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+        const result = routeFromPayload(assignment.route_polyline, assignment.route_distance_m, assignment.route_duration_s, assignment.route_traffic_segments)
+        routeLayer = buildRouteLayer(L, result.coords, result.traffic_segments, routeColorIndex++)
+        routeLayer!.addTo(map)
+        const bounds = (routeLayer as L.Polyline).getBounds?.()
+        if (bounds?.isValid()) map.fitBounds(bounds, { padding: [40, 40] })
+      } else {
+        await drawRoute(adjLat, adjLon, lat, lon)
+      }
     }
   },
 )
@@ -211,7 +220,7 @@ watch(events, async (evts) => {
       if (ev.route_polyline) {
         // Fast path: polyline already embedded in the SSE payload — no extra fetch needed
         if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
-        const result = routeFromPayload(ev.route_polyline, ev.route_distance_m, ev.route_duration_s)
+        const result = routeFromPayload(ev.route_polyline, ev.route_distance_m, ev.route_duration_s, ev.route_traffic_segments)
         routeLayer = buildRouteLayer(L, result.coords, result.traffic_segments, routeColorIndex++)
         routeLayer!.addTo(map)
         const bounds = (routeLayer as L.Polyline).getBounds?.()

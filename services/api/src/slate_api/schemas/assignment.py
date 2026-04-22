@@ -62,6 +62,7 @@ class AssignmentRead(AssignmentBase):
     route_fetched_at: datetime | None = None
     route_distance_m: int | None = None
     route_duration_s: int | None = None
+    route_traffic_segments: list[TrafficSegment] | None = None
     created_at: datetime
     updated_at: datetime
 

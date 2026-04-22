@@ -82,6 +82,7 @@ class Enricher:
                     route_provider=enriched.route_provider,
                     route_distance_m=enriched.route_distance_m,
                     route_duration_s=enriched.route_duration_s,
+                    route_traffic_segments=enriched.route_traffic_segments,
                     incident_type=enriched.incident_type,
                     severity=enriched.severity,
                     description=enriched.description,

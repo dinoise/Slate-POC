@@ -161,17 +161,19 @@ async function fetchRoute(
  * Build a RouteResult directly from a polyline string already embedded in an
  * SSE payload — skips the round-trip to the route API.
  *
- * Falls back to null for fields not available in the SSE payload (traffic
- * segments are not included in the trigger snapshot).
+ * When the SSE payload includes traffic segments (populated by a
+ * traffic-aware provider such as Google Routes), they are passed through
+ * so buildRouteLayer can colour the route. Otherwise falls back to [].
  */
 function routeFromPayload(
   polyline: string,
   distanceM: number | null,
   durationS: number | null,
+  trafficSegments?: TrafficSegment[] | null,
 ): RouteResult {
   return {
     coords: decodePolyline(polyline),
-    traffic_segments: [],
+    traffic_segments: trafficSegments ?? [],
     distance_m: distanceM,
     duration_s: durationS,
   }

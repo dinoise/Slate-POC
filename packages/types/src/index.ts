@@ -99,6 +99,7 @@ export interface Assignment {
   route_provider: string | null
   route_distance_m: number | null
   route_duration_s: number | null
+  route_traffic_segments: TrafficSegment[] | null
   created_at: string
   updated_at: string
 }
@@ -161,6 +162,14 @@ export interface ApiError {
   detail: string
 }
 
+// ── Route ─────────────────────────────────────────────────────────────────────
+
+export interface TrafficSegment {
+  start_index: number
+  end_index: number
+  speed: 'NORMAL' | 'SLOW' | 'TRAFFIC_JAM'
+}
+
 // ── SSE Events ────────────────────────────────────────────────────────────────
 
 export interface AssignmentEvent {
@@ -185,6 +194,7 @@ export interface AssignmentEvent {
   route_provider: string | null
   route_distance_m: number | null
   route_duration_s: number | null
+  route_traffic_segments: TrafficSegment[] | null
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────

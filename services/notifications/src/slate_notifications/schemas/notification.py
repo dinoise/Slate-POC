@@ -63,6 +63,7 @@ class EnrichedAssignmentEvent(BaseModel):
     route_provider: str | None = None
     route_distance_m: int | None = None
     route_duration_s: int | None = None
+    route_traffic_segments: list | None = None
 
     # Incident fields — joined from the incidents table
     incident_type: str
