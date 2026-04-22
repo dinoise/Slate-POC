@@ -1,42 +1,35 @@
 """
-Cloud Run Job entrypoint — batch assignment optimization.
+Cloud Run Job — batch assignment optimization.
 
-Replaces POST /assignments/optimize from the API.
-Reads job parameters from env vars (injected by Cloud Tasks / Cloud Run Job),
-runs OR-Tools assignment solver via slate_core, writes results to DB,
-and fires pg_notify so the notifications service picks up the new assignments.
+Reads available adjusters and open incidents from DB, builds a cost matrix,
+runs the OR-Tools assignment solver via slate_core, persists assignments,
+and fires pg_notify so the notifications service picks up new assignments.
 
-Usage (local):
-    DATABASE_URL=postgresql+asyncpg://... uv run python -m slate_jobs.optimize
-
-Cloud Run Job invocation:
-    gcloud run jobs execute slate-jobs-dev --update-env-vars TASK_PAYLOAD=<json>
+Invoked by the ``optimize`` console script installed via
+``[project.scripts]`` in pyproject.toml.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import logging
 
 import asyncpg
 import numpy as np
 from sqlalchemy import text
 
-from slate_core.optimization.assignment_solver import solve_assignment
+from slate_core.optimization.assignment_solver import solve
+from slate_infra.logging import get_logger, setup_logging
 
-from .config import settings
-from .db import async_session_maker, engine
+from ..config import settings
+from ..db import async_session_maker, engine
 
-logging.basicConfig(
-    level=settings.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 NOTIFY_CHANNEL = "assignment_events"
 
 
-async def run_optimize() -> None:
+async def _run() -> None:
     """
     Main optimization job.
 
@@ -47,7 +40,6 @@ async def run_optimize() -> None:
     logger.info("Starting optimization job")
 
     async with async_session_maker() as db:
-        # Load available adjusters with positions
         result = await db.execute(
             text("""
                 SELECT a.id, ap.latitude, ap.longitude
@@ -62,7 +54,6 @@ async def run_optimize() -> None:
         )
         adjusters = result.fetchall()
 
-        # Load open incidents
         result = await db.execute(
             text("""
                 SELECT id, latitude, longitude
@@ -83,17 +74,14 @@ async def run_optimize() -> None:
 
     logger.info("%d adjusters, %d incidents", len(adjusters), len(incidents))
 
-    # Simple Euclidean cost matrix (replace with OSRM travel times for prod)
     adj_coords = np.array([[a.latitude, a.longitude] for a in adjusters])
     inc_coords = np.array([[i.latitude, i.longitude] for i in incidents])
-    # Cost in degrees (proxy) — in prod use slate_core routing provider
     diff = adj_coords[:, None, :] - inc_coords[None, :, :]
     cost_matrix = np.sqrt((diff**2).sum(axis=2))
 
-    results, unassigned = solve_assignment(cost_matrix)
+    results, unassigned = solve(cost_matrix)
     logger.info("%d assignments solved, %d incidents unassigned", len(results), len(unassigned))
 
-    # Persist assignments and fire pg_notify
     dsn = str(settings.DATABASE_URL).replace("postgresql+asyncpg://", "postgresql://")
     notify_conn = await asyncpg.connect(dsn)
 
@@ -113,7 +101,7 @@ async def run_optimize() -> None:
                     {
                         "incident_id": incident.id,
                         "adjuster_id": adjuster.id,
-                        "dist_km": round(r.travel_time_min * 0.8, 2),  # rough estimate
+                        "dist_km": round(r.travel_time_min * 0.8, 2),
                         "travel_min": round(r.travel_time_min, 1),
                     },
                 )
@@ -141,5 +129,7 @@ async def run_optimize() -> None:
     logger.info("Optimization job completed — %d assignments created", len(results))
 
 
-if __name__ == "__main__":
-    asyncio.run(run_optimize())
+def main() -> None:
+    """Console script entrypoint — installed via [project.scripts]."""
+    setup_logging(log_level=settings.effective_log_level, is_local=settings.is_local)
+    asyncio.run(_run())

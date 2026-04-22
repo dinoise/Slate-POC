@@ -6,16 +6,35 @@ requires-python = ">=3.11"
 dependencies = [
     # Internal workspace packages
     "slate-core",
+    "slate-infra",
     # Database
     "sqlalchemy>=2.0.25",
     "asyncpg>=0.29.0",
     "pydantic-settings>=2.1.0",
     # ML & Data (demand prediction jobs)
+    "lightgbm>=4.6.0",
     "pandas>=2.2.0",
+    "pyarrow>=15.0.0",
     "numpy>=1.26.0",
+    # GCS — model artifact download
+    "google-cloud-storage>=2.14.0",
     # HTTP Client
     "httpx>=0.26.0",
 ]
+
+[project.scripts]
+demand-refresh = "slate_jobs.demand_refresh.main:main"
+optimize       = "slate_jobs.optimize.main:main"
+
+[dependency-groups]
+dev = [
+    "testcontainers[postgres]>=4.14.2",
+    "pyarrow>=15.0.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]
 
 [build-system]
 requires = ["hatchling"]
@@ -26,3 +45,4 @@ packages = ["src/slate_jobs"]
 
 [tool.uv.sources]
 slate-core = { workspace = true }
+slate-infra = { workspace = true }

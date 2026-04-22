@@ -1,0 +1,249 @@
+name: "[Shared] Deploy — Cloud Run Job"
+
+on:
+  workflow_call:
+    inputs:
+      # ── Imagen ────────────────────────────────────────────────────────────────
+      image-registry:
+        description: "Registry base, e.g. us-central1-docker.pkg.dev"
+        required: true
+        type: string
+      image-service-name:
+        description: "Nombre del servicio en Artifact Registry (basename del service-path)"
+        required: true
+        type: string
+      image-tag:
+        description: "Tag de la imagen, e.g. dev-abc1234-1234567890"
+        required: true
+        type: string
+
+      # ── Cloud Run Job ─────────────────────────────────────────────────────────
+      job-name:
+        description: "Nombre del Cloud Run Job, e.g. slate-jobs-demand-refresh-dev"
+        required: true
+        type: string
+      command:
+        description: "Script instalado a ejecutar, e.g. demand-refresh"
+        required: true
+        type: string
+      region:
+        required: false
+        type: string
+        default: "us-central1"
+      environment:
+        required: false
+        type: string
+        default: "dev"
+      memory:
+        required: false
+        type: string
+        default: "512Mi"
+      cpu:
+        required: false
+        type: string
+        default: "1"
+      task-timeout:
+        description: "Tiempo máximo de ejecución del job, e.g. 1800s, 2h"
+        required: false
+        type: string
+        default: "3600s"
+      max-retries:
+        description: "Número máximo de reintentos ante fallo (0 = sin reintentos)"
+        required: false
+        type: number
+        default: 0
+      runtime-service-account:
+        description: "SA que ejecuta el contenedor, e.g. poc-jobs@project.iam.gserviceaccount.com"
+        required: false
+        type: string
+        default: ""
+      vpc-subnet:
+        description: "Subnet para Direct VPC Egress, e.g. poc-cloudrun-subnet"
+        required: false
+        type: string
+        default: ""
+      vpc-egress:
+        description: "Modo de egress VPC: all-traffic | private-ranges-only"
+        required: false
+        type: string
+        default: "private-ranges-only"
+      cloudrun-secrets:
+        description: |
+          Secrets de Secret Manager como env vars. Un par por línea:
+            DATABASE_URL=poc-database-dev-url:latest
+        required: false
+        type: string
+        default: ""
+      cloudrun-env-vars:
+        description: |
+          Variables de entorno planas (no sensitivas). Un par por línea:
+            GCS_BUCKET=lennken-poc-models
+            MODEL_VERSION=v1.0.0
+        required: false
+        type: string
+        default: ""
+
+      # ── Cloud Scheduler (opcional) ────────────────────────────────────────────
+      scheduler-name:
+        description: "Nombre del Cloud Scheduler job. Si se omite, no se configura scheduler."
+        required: false
+        type: string
+        default: ""
+      scheduler-cron:
+        description: "Expresión cron, e.g. '0 2 * * *'. Requerido si scheduler-name está definido."
+        required: false
+        type: string
+        default: ""
+      scheduler-timezone:
+        description: "Timezone del cron, e.g. America/Bogota"
+        required: false
+        type: string
+        default: "UTC"
+      scheduler-service-account:
+        description: "SA con permiso para ejecutar el Cloud Run Job (run.jobs.run)"
+        required: false
+        type: string
+        default: ""
+
+    secrets:
+      project-id:
+        required: true
+      workload-identity-provider:
+        required: true
+
+jobs:
+  deploy:
+    name: "Deploy → Cloud Run Job (${{ inputs.job-name }})"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configurar credenciales GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.workload-identity-provider }}
+          service_account: poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com
+
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.project-id }}
+
+      - name: Construir flags opcionales
+        id: flags
+        run: |
+          FLAGS=""
+
+          if [ -n "${{ inputs.runtime-service-account }}" ]; then
+            FLAGS="${FLAGS} --service-account=${{ inputs.runtime-service-account }}"
+          fi
+
+          if [ -n "${{ inputs.vpc-subnet }}" ]; then
+            FLAGS="${FLAGS} --network=default --subnet=${{ inputs.vpc-subnet }} --vpc-egress=${{ inputs.vpc-egress }}"
+          fi
+
+          # Secrets: convertir multilínea a formato --set-secrets=A=x:v,B=y:v
+          SECRETS_RAW="${{ inputs.cloudrun-secrets }}"
+          if [ -n "$SECRETS_RAW" ]; then
+            SECRETS_FLAG=$(echo "$SECRETS_RAW" | tr '\n' ',' | sed 's/,$//')
+            FLAGS="${FLAGS} --set-secrets=${SECRETS_FLAG}"
+          fi
+
+          # Env vars: convertir multilínea a formato --set-env-vars=A=x,B=y
+          ENVVARS_RAW="${{ inputs.cloudrun-env-vars }}"
+          if [ -n "$ENVVARS_RAW" ]; then
+            ENVVARS_FLAG=$(echo "ENVIRONMENT=${{ inputs.environment }},$ENVVARS_RAW" | tr '\n' ',' | sed 's/,$//')
+            FLAGS="${FLAGS} --set-env-vars=${ENVVARS_FLAG}"
+          else
+            FLAGS="${FLAGS} --set-env-vars=ENVIRONMENT=${{ inputs.environment }}"
+          fi
+
+          echo "flags=${FLAGS}" >> "$GITHUB_OUTPUT"
+
+      - name: Actualizar o crear Cloud Run Job
+        run: |
+          IMAGE="${{ inputs.image-registry }}/${{ secrets.project-id }}/poc-images/${{ inputs.image-service-name }}:${{ inputs.image-tag }}"
+
+          gcloud run jobs update ${{ inputs.job-name }} \
+            --image="${IMAGE}" \
+            --command="${{ inputs.command }}" \
+            --region=${{ inputs.region }} \
+            --memory=${{ inputs.memory }} \
+            --cpu=${{ inputs.cpu }} \
+            --task-timeout=${{ inputs.task-timeout }} \
+            --max-retries=${{ inputs.max-retries }} \
+            ${{ steps.flags.outputs.flags }} \
+            --project=${{ secrets.project-id }} \
+          || \
+          gcloud run jobs create ${{ inputs.job-name }} \
+            --image="${IMAGE}" \
+            --command="${{ inputs.command }}" \
+            --region=${{ inputs.region }} \
+            --memory=${{ inputs.memory }} \
+            --cpu=${{ inputs.cpu }} \
+            --task-timeout=${{ inputs.task-timeout }} \
+            --max-retries=${{ inputs.max-retries }} \
+            ${{ steps.flags.outputs.flags }} \
+            --project=${{ secrets.project-id }}
+
+      - name: Resumen de deploy
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          EMOJI="✅"
+          if [ "$STATUS" != "success" ]; then EMOJI="❌"; fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "${EMOJI} Cloud Run Job ${{ inputs.job-name }} — ${STATUS}"
+          echo "🐳 Image: ${{ inputs.image-registry }}/${{ secrets.project-id }}/poc-images/${{ inputs.image-service-name }}:${{ inputs.image-tag }}"
+          echo "⚙️  Command: ${{ inputs.command }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "👤 Actor: ${{ github.actor }}"
+          echo "🔖 Commit: ${{ github.sha }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  configure-scheduler:
+    name: "Configurar Cloud Scheduler (${{ inputs.scheduler-name }})"
+    needs: [deploy]
+    if: inputs.scheduler-name != ''
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configurar credenciales GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.workload-identity-provider }}
+          service_account: poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com
+
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.project-id }}
+
+      - name: Crear o actualizar Cloud Scheduler job
+        run: |
+          JOB_URI="https://${{ inputs.region }}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ secrets.project-id }}/jobs/${{ inputs.job-name }}:run"
+
+          COMMON_FLAGS="
+            --location=${{ inputs.region }}
+            --schedule=${{ inputs.scheduler-cron }}
+            --time-zone=${{ inputs.scheduler-timezone }}
+            --uri=${JOB_URI}
+            --message-body={}
+            --http-method=POST
+            --oauth-service-account-email=${{ inputs.scheduler-service-account }}
+            --project=${{ secrets.project-id }}
+          "
+
+          if gcloud scheduler jobs describe ${{ inputs.scheduler-name }} \
+               --location=${{ inputs.region }} \
+               --project=${{ secrets.project-id }} &>/dev/null; then
+            gcloud scheduler jobs update http ${{ inputs.scheduler-name }} ${COMMON_FLAGS}
+            echo "✅ Scheduler actualizado: ${{ inputs.scheduler-name }}"
+          else
+            gcloud scheduler jobs create http ${{ inputs.scheduler-name }} ${COMMON_FLAGS}
+            echo "✅ Scheduler creado: ${{ inputs.scheduler-name }}"
+          fi
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🕐 Cron: ${{ inputs.scheduler-cron }} (${{ inputs.scheduler-timezone }})"
+          echo "🎯 Target: ${JOB_URI}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
