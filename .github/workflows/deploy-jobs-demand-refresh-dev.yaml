@@ -69,7 +69,7 @@ jobs:
       scheduler-name:             slate-demand-refresh-dev
       scheduler-cron:             "0 2 * * *"
       scheduler-timezone:         America/Bogota
-      scheduler-service-account:  poc-scheduler@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+      scheduler-service-account:  poc-scheduler@lennken-poc.iam.gserviceaccount.com
     secrets:
       project-id:                  ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider:  ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
