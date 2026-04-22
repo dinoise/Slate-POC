@@ -101,16 +101,11 @@ watch(sseEvent, (ev) => {
 const mapContainer = ref<HTMLElement>()
 let map: L.Map | null = null
 let incidentMarker: L.Marker | null = null
-let adjusterMarker: L.Marker | null = null
 let routeLine: L.Polyline | null = null
 
 const incIcon = L.divIcon({
   html: '<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));">📍</div>',
   iconSize: [26, 26], iconAnchor: [13, 26], className: '',
-})
-const adjIcon = L.divIcon({
-  html: '<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));">🔵</div>',
-  iconSize: [26, 26], iconAnchor: [13, 13], className: '',
 })
 
 function initMap() {

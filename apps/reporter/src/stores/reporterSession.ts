@@ -78,6 +78,7 @@ export const useReporterSessionStore = defineStore('reporterSession', () => {
       route_provider: ev.route_provider,
       route_distance_m: ev.route_distance_m,
       route_duration_s: ev.route_duration_s,
+      route_traffic_segments: ev.route_traffic_segments,
       created_at: ev.assigned_at,
       updated_at: ev.assigned_at,
     } satisfies Assignment

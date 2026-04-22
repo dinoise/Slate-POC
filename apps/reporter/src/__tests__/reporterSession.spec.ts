@@ -39,7 +39,7 @@ function makeAssignment(overrides: Partial<Assignment> = {}): Assignment {
     travel_time_minutes: 10, optimization_score: null,
     estimated_arrival_time: null, actual_arrival_time: null, completed_at: null,
     notes: null, route_polyline: null, route_provider: null,
-    route_distance_m: null, route_duration_s: null,
+    route_distance_m: null, route_duration_s: null, route_traffic_segments: null,
     created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
     ...overrides,
   }
@@ -119,7 +119,7 @@ describe('reporterSession store', () => {
         distance_km: 3.1, travel_time_minutes: 12,
         assigned_at: '2026-01-01T00:00:00Z',
         route_polyline: null, route_provider: null,
-        route_distance_m: null, route_duration_s: null,
+        route_distance_m: null, route_duration_s: null, route_traffic_segments: null,
         incident_type: 'collision', severity: 3,
         description: null, address: 'Calle 1', latitude: 19.4, longitude: -99.1,
       }
