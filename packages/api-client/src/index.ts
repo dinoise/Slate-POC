@@ -12,7 +12,10 @@ import type {
   PaginatedResponse,
   ProviderSettings,
   AssignmentStatus,
+  RecommendationRequest,
+  RecommendationResponse,
 } from '@slate/types'
+
 
 // ── Auth token ────────────────────────────────────────────────────────────────
 
@@ -162,5 +165,15 @@ export const settingsApi = {
     apiFetch<ProviderSettings>('/api/v1/settings/provider', {
       method: 'PUT',
       body: JSON.stringify({ provider }),
+    }),
+}
+
+// ── Recommendations ───────────────────────────────────────────────────────────
+
+export const recommendationsApi = {
+  generate: (req: RecommendationRequest) =>
+    apiFetch<RecommendationResponse>('/api/v1/recommendations/', {
+      method: 'POST',
+      body: JSON.stringify(req),
     }),
 }

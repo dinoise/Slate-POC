@@ -9,6 +9,10 @@ Routes:
         Subscribe to assignment events for a specific incident.
         Consumed by the reporter app to track assignment progress.
 
+    GET /notifications/stream/observatory
+        Subscribe to all assignment events (no entity filter).
+        Consumed by the admin observatory dashboard.
+
 Design:
     Route handlers are intentionally thin — each handler:
     1. Subscribes to the broadcaster.
@@ -159,6 +163,41 @@ async def incident_stream(
     enricher = Enricher(db)
     return StreamingResponse(
         _event_generator(request, Channel.INCIDENT, incident_id, enricher),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
+
+
+@router.get(
+    "/stream/observatory",
+    dependencies=[Depends(verify_google_token)],
+    summary="SSE stream for the admin observatory",
+    description=(
+        "Subscribe to all assignment events across the entire fleet. "
+        "Delivers ``assignment`` events for every adjuster and incident — "
+        "no entity filter. Used by the admin observatory dashboard."
+    ),
+)
+async def observatory_stream(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Open a global SSE stream for the admin observatory.
+
+    Receives every assignment event regardless of adjuster or incident.
+    Uses ``Channel.OBSERVATORY`` with ``entity_id=0`` as the conventional
+    global key — the broadcaster fans out all payloads to this channel.
+
+    Args:
+        request: Injected by FastAPI — used for disconnect detection.
+        db: Async DB session injected by FastAPI.
+
+    Returns:
+        A ``StreamingResponse`` with ``text/event-stream`` media type.
+    """
+    enricher = Enricher(db)
+    return StreamingResponse(
+        _event_generator(request, Channel.OBSERVATORY, 0, enricher),
         media_type="text/event-stream",
         headers=_SSE_HEADERS,
     )

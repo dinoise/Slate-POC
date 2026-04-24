@@ -1,4 +1,5 @@
 import './style.css'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import { createApp } from 'vue'
 
 // InputChips emite un warning de deprecación interno de PrimeVue v4 que apunta

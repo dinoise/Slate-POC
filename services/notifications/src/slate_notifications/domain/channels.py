@@ -25,3 +25,4 @@ class Channel(StrEnum):
 
     ADJUSTER = "adjuster"
     INCIDENT = "incident"
+    OBSERVATORY = "observatory"  # global channel — all assignment events, no entity filter

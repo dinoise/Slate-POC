@@ -197,8 +197,60 @@ export interface AssignmentEvent {
   route_traffic_segments: TrafficSegment[] | null
 }
 
+// ── Observatory ───────────────────────────────────────────────────────────────
+
+/** Names of toggleable map layers in the observatory dashboard. */
+export type LayerName = 'demand' | 'assignments' | 'routes'
+
+/** Feature selected by clicking on the observatory map. */
+export interface ObservatoryClickedFeature {
+  type: 'assignment' | 'hexagon'
+  /** Populated when clicking a siniestro/adjuster marker. */
+  assignmentEvent?: AssignmentEvent
+  /** Populated when clicking an H3 hexagon. */
+  h3Index?: string
+  demandLevel?: number
+  predAbs?: number
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 export interface ProviderSettings {
   provider: RouteProvider
+}
+
+// ── Positioning Recommendations ───────────────────────────────────────────────
+
+export interface RecommendationRequest {
+  scenario?: string          // default: "initial"
+  hora_num: number           // 0–23
+  dia_semana_num: number     // 0=Mon … 6=Sun
+  radio_km?: number          // default: 7.5
+  umbral_gain?: number       // default: 0.5
+  spread_factor?: number     // 0–1, default: 0.5
+  spread_rings?: number      // 1–8, default: 3
+  save_as_scenario?: string | null
+}
+
+export interface RecommendationItem {
+  adjuster_id: number
+  adjuster_name: string
+  current_hex: string | null
+  recommended_hex: string
+  recommended_lat: number
+  recommended_lon: number
+  demand_gain: number
+  distance_km: number
+  eta_min: number
+  reason: string
+}
+
+export interface RecommendationResponse {
+  scenario_source: string
+  hora_num: number
+  dia_semana_num: number
+  total_adjusters: number
+  adjusters_to_move: number
+  recommendations: RecommendationItem[]
+  saved_as: string | null
 }

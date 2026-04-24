@@ -56,6 +56,11 @@ const router = createRouter({
       component: () => import('../views/PositioningView.vue'),
     },
     {
+      path: '/observatory',
+      name: 'observatory',
+      component: () => import('../views/ObservatoryView.vue'),
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),

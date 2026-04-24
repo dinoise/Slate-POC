@@ -22,6 +22,7 @@ const items = [
   {
     label: 'Operaciones',
     items: [
+      { label: 'Observatorio', icon: 'pi pi-globe', route: '/observatory' },
       { label: 'Incidentes', icon: 'pi pi-exclamation-triangle', route: '/incidents' },
       { label: 'Ajustadores', icon: 'pi pi-users', route: '/adjusters' },
       { label: 'Asignaciones', icon: 'pi pi-link', route: '/assignments' },

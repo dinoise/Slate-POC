@@ -124,7 +124,7 @@ class NotificationBroadcaster:
         incident_id: int | None,
         payload: dict,
     ) -> None:
-        """Convenience: broadcast to both ADJUSTER and INCIDENT channels.
+        """Convenience: broadcast to ADJUSTER, INCIDENT, and OBSERVATORY channels.
 
         Called by the pg_notify listener and the outbox poller, which receive
         a single payload and need to fan it out to all relevant subscribers.
@@ -137,6 +137,8 @@ class NotificationBroadcaster:
         await self.broadcast(Channel.ADJUSTER, adjuster_id, payload)
         if incident_id is not None:
             await self.broadcast(Channel.INCIDENT, incident_id, payload)
+        # OBSERVATORY uses entity_id=0 as the conventional "global" key
+        await self.broadcast(Channel.OBSERVATORY, 0, payload)
 
 
 # Singleton instance — created by main.py lifespan and shared across modules.

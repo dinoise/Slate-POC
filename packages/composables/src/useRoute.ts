@@ -32,7 +32,7 @@ const TRAFFIC_COLORS: Record<string, string> = {
 }
 
 /** Decode a Google-encoded polyline string into [[lat, lon], ...] pairs. */
-function decodePolyline(encoded: string): [number, number][] {
+export function decodePolyline(encoded: string): [number, number][] {
   const coords: [number, number][] = []
   let index = 0
   let lat = 0
