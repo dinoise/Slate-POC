@@ -17,7 +17,7 @@ const { activeAssignments, assignments, connected, lastEventAt, error: sseError 
 
 // ── Map ───────────────────────────────────────────────────────────────────────
 const mapContainer = ref<HTMLElement | null>(null)
-const { clickedFeature, layerVisibility, setDemandLayer, setAssignmentsLayer, toggleLayer, onViewportChange, destroy } =
+const { clickedFeature, hoveredTooltip, layerVisibility, setDemandLayer, setAssignmentsLayer, toggleLayer, onViewportChange, destroy } =
   useObservatoryMap(mapContainer)
 
 // Last known viewport bbox — updated by map moveend/zoomend via onViewportChange.
@@ -168,12 +168,12 @@ const freshnessLabel = computed(() => {
 
 // ── KPI counts ────────────────────────────────────────────────────────────────
 const kpiActiveAdjusters = computed(() => {
-  const ids = new Set(activeAssignments.value.map((e) => e.adjuster_id))
+  const ids = new Set(activeAssignments.value.map((e) => e.adjuster?.id).filter(Boolean))
   return ids.size
 })
 
 const kpiOpenIncidents = computed(() => {
-  const ids = new Set(activeAssignments.value.map((e) => e.incident_id))
+  const ids = new Set(activeAssignments.value.map((e) => e.incident.id))
   return ids.size
 })
 
@@ -188,6 +188,17 @@ function closeDrawer() {
 
 const DEMAND_LABEL: Record<number, string> = { 0: 'Baja', 1: 'Media', 2: 'Alta' }
 const DEMAND_SEVERITY: Record<number, string> = { 0: 'secondary', 1: 'warn', 2: 'danger' }
+
+const STATUS_LABEL: Record<string, string> = {
+  pending:     'Pendiente',
+  assigned:    'Asignado',
+  accepted:    'Aceptado',
+  en_route:    'En camino',
+  arrived:     'En sitio',
+  in_progress: 'En atención',
+  completed:   'Completado',
+  cancelled:   'Cancelado',
+}
 </script>
 
 <template>
@@ -361,8 +372,52 @@ const DEMAND_SEVERITY: Record<number, string> = { 0: 'secondary', 1: 'warn', 2: 
         </div>
       </aside>
 
-      <!-- Map container -->
-      <div ref="mapContainer" class="map-container" />
+      <!-- Map container + hover tooltip overlay -->
+      <div class="map-wrapper">
+        <div ref="mapContainer" class="map-container" />
+
+        <!-- Hover tooltip — positioned over the canvas at Deck.gl pixel coords.
+             Fades in/out in 150 ms. Appears 16px above the cursor so it never
+             obscures the hovered marker. Shifts left when near the right edge. -->
+        <Transition name="map-tooltip">
+          <div
+            v-if="hoveredTooltip"
+            class="map-tooltip"
+            :style="{
+              left: `${hoveredTooltip.x}px`,
+              top:  `${hoveredTooltip.y - 16}px`,
+            }"
+          >
+            <!-- Status pill -->
+            <div class="mtt-status-row">
+              <span class="mtt-dot" :class="`mtt-dot--${hoveredTooltip.event.status}`" />
+              <span class="mtt-status">{{ STATUS_LABEL[hoveredTooltip.event.status] ?? hoveredTooltip.event.status }}</span>
+              <span class="mtt-id">#{{ hoveredTooltip.event.assignment_id }}</span>
+            </div>
+            <!-- Incident type + severity -->
+            <div class="mtt-type">
+              <span class="mtt-badge">{{ hoveredTooltip.event.incident.type.replace(/_/g, ' ') }}</span>
+              <span class="mtt-severity" :data-lvl="hoveredTooltip.event.incident.severity">
+                Sev {{ hoveredTooltip.event.incident.severity }}
+              </span>
+            </div>
+            <!-- Address (truncated) -->
+            <div v-if="hoveredTooltip.event.incident.address" class="mtt-address">
+              {{ hoveredTooltip.event.incident.address }}
+            </div>
+            <!-- Distance + ETA -->
+            <div v-if="hoveredTooltip.event.distance_km || hoveredTooltip.event.travel_time_minutes" class="mtt-meta">
+              <span v-if="hoveredTooltip.event.distance_km">
+                📍 {{ hoveredTooltip.event.distance_km.toFixed(1) }} km
+              </span>
+              <span v-if="hoveredTooltip.event.travel_time_minutes">
+                ⏱ {{ hoveredTooltip.event.travel_time_minutes }} min
+              </span>
+            </div>
+            <div class="mtt-hint">Clic para ver detalle</div>
+          </div>
+        </Transition>
+      </div>
     </div>
 
     <!-- ── Side drawer ────────────────────────────────────────────────── -->
@@ -402,11 +457,11 @@ const DEMAND_SEVERITY: Record<number, string> = { 0: 'secondary', 1: 'warn', 2: 
           </div>
           <div class="drawer-row">
             <span class="drawer-label">Ajustador</span>
-            <span class="drawer-value">#{{ clickedFeature.assignmentEvent.adjuster_id }}</span>
+            <span class="drawer-value">#{{ clickedFeature.assignmentEvent.adjuster?.id ?? '—' }}</span>
           </div>
           <div class="drawer-row">
             <span class="drawer-label">Siniestro</span>
-            <span class="drawer-value">#{{ clickedFeature.assignmentEvent.incident_id }}</span>
+            <span class="drawer-value">#{{ clickedFeature.assignmentEvent.incident.id }}</span>
           </div>
           <div class="drawer-row">
             <span class="drawer-label">Estado</span>
@@ -414,11 +469,11 @@ const DEMAND_SEVERITY: Record<number, string> = { 0: 'secondary', 1: 'warn', 2: 
           </div>
           <div class="drawer-row">
             <span class="drawer-label">Tipo</span>
-            <span class="drawer-value">{{ clickedFeature.assignmentEvent.incident_type }}</span>
+            <span class="drawer-value">{{ clickedFeature.assignmentEvent.incident.type }}</span>
           </div>
-          <div v-if="clickedFeature.assignmentEvent.address" class="drawer-row">
+          <div v-if="clickedFeature.assignmentEvent.incident.address" class="drawer-row">
             <span class="drawer-label">Dirección</span>
-            <span class="drawer-value drawer-value--wrap">{{ clickedFeature.assignmentEvent.address }}</span>
+            <span class="drawer-value drawer-value--wrap">{{ clickedFeature.assignmentEvent.incident.address }}</span>
           </div>
           <div v-if="clickedFeature.assignmentEvent.distance_km" class="drawer-row">
             <span class="drawer-label">Distancia</span>
@@ -428,9 +483,9 @@ const DEMAND_SEVERITY: Record<number, string> = { 0: 'secondary', 1: 'warn', 2: 
             <span class="drawer-label">Tiempo estimado</span>
             <span class="drawer-value">{{ clickedFeature.assignmentEvent.travel_time_minutes }} min</span>
           </div>
-          <div v-if="clickedFeature.assignmentEvent.route_provider" class="drawer-row">
+          <div v-if="clickedFeature.assignmentEvent.route?.provider" class="drawer-row">
             <span class="drawer-label">Proveedor ruta</span>
-            <span class="drawer-value muted">{{ clickedFeature.assignmentEvent.route_provider }}</span>
+            <span class="drawer-value muted">{{ clickedFeature.assignmentEvent.route.provider }}</span>
           </div>
         </div>
       </template>
@@ -668,14 +723,156 @@ const DEMAND_SEVERITY: Record<number, string> = { 0: 'secondary', 1: 'warn', 2: 
   align-items: flex-start;
 }
 
-/* ── Map ────────────────────────────────────────────────────────────────────── */
-.map-container {
+/* ── Map wrapper + container ────────────────────────────────────────────────── */
+.map-wrapper {
   flex: 1;
   min-width: 0;
+  position: relative;   /* tooltip is absolutely positioned inside here */
+}
+
+.map-container {
+  width: 100%;
+  height: 100%;
   border-radius: 8px;
   overflow: hidden;
   background: var(--p-surface-800);
-  position: relative;
+}
+
+/* ── Hover tooltip ──────────────────────────────────────────────────────────── */
+.map-tooltip {
+  position: absolute;
+  /* Shift left by 50% of its own width so it centres on the cursor.
+     translateY(-100%) lifts the card fully above the anchor point. */
+  transform: translate(-50%, -100%);
+  pointer-events: none;   /* never intercepts mouse events — the canvas keeps them */
+  z-index: 10;
+
+  background: rgba(15, 15, 25, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  padding: 0.55rem 0.75rem;
+  min-width: 190px;
+  max-width: 260px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* Status row */
+.mtt-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.mtt-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Status dot colours — mirror assignment status semantics */
+.mtt-dot--pending,
+.mtt-dot--assigned     { background: #f59e0b; }
+.mtt-dot--accepted,
+.mtt-dot--en_route     { background: #3b82f6; }
+.mtt-dot--arrived,
+.mtt-dot--in_progress  { background: #22c55e; }
+.mtt-dot--completed    { background: #6b7280; }
+.mtt-dot--cancelled    { background: #ef4444; }
+
+.mtt-status {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #e5e7eb;
+  flex: 1;
+}
+
+.mtt-id {
+  font-size: 0.72rem;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Type + severity row */
+.mtt-type {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.mtt-badge {
+  font-size: 0.72rem;
+  background: rgba(99, 102, 241, 0.25);
+  color: #a5b4fc;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.mtt-severity {
+  font-size: 0.7rem;
+  color: #9ca3af;
+}
+
+/* Severity colour coding */
+.mtt-severity[data-lvl="1"] { color: #6b7280; }
+.mtt-severity[data-lvl="2"] { color: #84cc16; }
+.mtt-severity[data-lvl="3"] { color: #f59e0b; }
+.mtt-severity[data-lvl="4"] { color: #f97316; }
+.mtt-severity[data-lvl="5"] { color: #ef4444; }
+
+/* Address */
+.mtt-address {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.35;
+}
+
+/* Distance + ETA */
+.mtt-meta {
+  display: flex;
+  gap: 0.7rem;
+  font-size: 0.75rem;
+  color: #d1d5db;
+}
+
+/* Hint footer */
+.mtt-hint {
+  font-size: 0.67rem;
+  color: #4b5563;
+  margin-top: 0.1rem;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  padding-top: 0.25rem;
+}
+
+/* ── Tooltip fade transition ────────────────────────────────────────────────── */
+.map-tooltip-enter-active,
+.map-tooltip-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.map-tooltip-enter-from,
+.map-tooltip-leave-to {
+  opacity: 0;
+  /* Slide up 6px on enter, slide down 6px on leave — subtle spring feel */
+  transform: translate(-50%, calc(-100% + 6px));
+}
+
+.map-tooltip-enter-to,
+.map-tooltip-leave-from {
+  opacity: 1;
+  transform: translate(-50%, -100%);
 }
 
 /* ── Drawer ─────────────────────────────────────────────────────────────────── */

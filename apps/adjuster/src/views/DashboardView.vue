@@ -196,36 +196,36 @@ watch(events, async (evts) => {
 
   // Update incident meta from SSE payload (already enriched by notifications service)
   incidentMeta.value = {
-    type: ev.incident_type ?? null,
-    address: ev.address ?? null,
-    lat: ev.latitude ?? null,
-    lon: ev.longitude ?? null,
-    severity: typeof ev.severity === 'number' ? ev.severity : null,
+    type: ev.incident.type ?? null,
+    address: ev.incident.address ?? null,
+    lat: ev.incident.latitude ?? null,
+    lon: ev.incident.longitude ?? null,
+    severity: typeof ev.incident.severity === 'number' ? ev.incident.severity : null,
   }
 
   // Place marker and draw route
   if (!map) return
   const adj = store.adjuster
-  if (ev.latitude && ev.longitude) {
+  if (ev.incident.latitude && ev.incident.longitude) {
     if (incidentMarker) map.removeLayer(incidentMarker)
-    incidentMarker = L.marker([ev.latitude, ev.longitude], { icon: incIcon })
-      .bindTooltip(ev.incident_type ?? 'Siniestro')
+    incidentMarker = L.marker([ev.incident.latitude, ev.incident.longitude], { icon: incIcon })
+      .bindTooltip(ev.incident.type ?? 'Siniestro')
       .addTo(map)
 
     const adjLat = adj?.current_latitude ?? adj?.home_latitude
     const adjLon = adj?.current_longitude ?? adj?.home_longitude
     if (adjLat && adjLon) {
-      if (ev.route_polyline) {
+      if (ev.route?.polyline) {
         // Fast path: polyline already embedded in the SSE payload — no extra fetch needed
         if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
-        const result = routeFromPayload(ev.route_polyline, ev.route_distance_m, ev.route_duration_s, ev.route_traffic_segments)
+        const result = routeFromPayload(ev.route.polyline, ev.route.distance_m, ev.route.duration_s, ev.route.traffic_segments)
         routeLayer = buildRouteLayer(L, result.coords, result.traffic_segments, routeColorIndex++)
         routeLayer!.addTo(map)
         const bounds = (routeLayer as L.Polyline).getBounds?.()
         if (bounds?.isValid()) map.fitBounds(bounds, { padding: [40, 40] })
       } else {
         // Fallback: route not yet fetched — call route API
-        await drawRoute(adjLat, adjLon, ev.latitude, ev.longitude)
+        await drawRoute(adjLat, adjLon, ev.incident.latitude, ev.incident.longitude)
       }
     }
   }

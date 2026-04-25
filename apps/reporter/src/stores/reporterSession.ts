@@ -63,8 +63,8 @@ export const useReporterSessionStore = defineStore('reporterSession', () => {
   function applySSEEvent(ev: AssignmentEvent) {
     assignment.value = {
       id: ev.assignment_id,
-      incident_id: ev.incident_id,
-      adjuster_id: ev.adjuster_id,
+      incident_id: ev.incident.id,
+      adjuster_id: ev.adjuster?.id ?? 0,
       status: ev.status,
       distance_km: ev.distance_km,
       travel_time_minutes: ev.travel_time_minutes,
@@ -74,11 +74,11 @@ export const useReporterSessionStore = defineStore('reporterSession', () => {
       actual_arrival_time: null,
       completed_at: null,
       notes: null,
-      route_polyline: ev.route_polyline,
-      route_provider: ev.route_provider,
-      route_distance_m: ev.route_distance_m,
-      route_duration_s: ev.route_duration_s,
-      route_traffic_segments: ev.route_traffic_segments,
+      route_polyline: ev.route?.polyline ?? null,
+      route_provider: ev.route?.provider ?? null,
+      route_distance_m: ev.route?.distance_m ?? null,
+      route_duration_s: ev.route?.duration_s ?? null,
+      route_traffic_segments: ev.route?.traffic_segments ?? null,
       created_at: ev.assigned_at,
       updated_at: ev.assigned_at,
     } satisfies Assignment

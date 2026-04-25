@@ -114,14 +114,16 @@ describe('reporterSession store', () => {
     it('updates assignment from SSE payload', () => {
       const store = useReporterSessionStore()
       const ev: AssignmentEvent = {
-        assignment_id: 5, incident_id: 1, adjuster_id: 10,
+        assignment_id: 5,
         status: 'accepted', event_type: 'assignment.updated',
         distance_km: 3.1, travel_time_minutes: 12,
         assigned_at: '2026-01-01T00:00:00Z',
-        route_polyline: null, route_provider: null,
-        route_distance_m: null, route_duration_s: null, route_traffic_segments: null,
-        incident_type: 'collision', severity: 3,
-        description: null, address: 'Calle 1', latitude: 19.4, longitude: -99.1,
+        incident: {
+          id: 1, type: 'collision', severity: 3,
+          description: null, address: 'Calle 1', latitude: 19.4, longitude: -99.1,
+        },
+        adjuster: { id: 10, latitude: 19.3, longitude: -99.2 },
+        route: null,
       }
 
       store.applySSEEvent(ev)

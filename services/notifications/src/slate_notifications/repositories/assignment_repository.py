@@ -7,11 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from slate_core.models import Assignment, Incident
+from slate_core.models.adjuster import Adjuster
 
 
 @dataclass
 class EnrichedAssignment:
-    """Flat projection of assignment + incident data for SSE payloads."""
+    """Flat projection of assignment + incident + adjuster location for SSE payloads."""
 
     assignment_id: int
     adjuster_id: int
@@ -31,6 +32,9 @@ class EnrichedAssignment:
     address: str | None
     latitude: float
     longitude: float
+    # Adjuster home location — always present (non-nullable in adjusters table)
+    adjuster_lat: float
+    adjuster_lon: float
 
 
 class AssignmentRepository:
@@ -40,20 +44,23 @@ class AssignmentRepository:
         self.db = db
 
     async def get_enriched(self, assignment_id: int) -> EnrichedAssignment | None:
-        """Return a flat assignment+incident projection for SSE enrichment.
+        """Return a flat assignment + incident + adjuster location projection.
 
-        Replaces the raw SQL JOIN that was previously hardcoded in stream.py.
+        JOINs adjusters to include home_latitude/home_longitude — always
+        populated, unlike adjuster_positions which requires a positioning
+        job to have run first.
         """
         result = await self.db.execute(
-            select(Assignment, Incident)
+            select(Assignment, Incident, Adjuster)
             .join(Incident, Incident.id == Assignment.incident_id)
+            .join(Adjuster, Adjuster.id == Assignment.adjuster_id)
             .where(Assignment.id == assignment_id)
         )
         row = result.first()
         if row is None:
             return None
 
-        assignment, incident = row
+        assignment, incident, adjuster = row
         return EnrichedAssignment(
             assignment_id=assignment.id,
             adjuster_id=assignment.adjuster_id,
@@ -73,4 +80,6 @@ class AssignmentRepository:
             address=incident.address,
             latitude=incident.latitude,
             longitude=incident.longitude,
+            adjuster_lat=adjuster.home_latitude,
+            adjuster_lon=adjuster.home_longitude,
         )

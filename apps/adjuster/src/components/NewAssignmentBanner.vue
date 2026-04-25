@@ -38,8 +38,8 @@ function dismiss() {
       <v-icon size="20">mdi-bell-ring</v-icon>
       <div>
         <div class="text-body-2 font-weight-bold">Nueva asignación</div>
-        <div v-if="event?.incident_type" class="text-caption">
-          {{ event.incident_type.replace(/_/g, ' ') }} · {{ event.address ?? '' }}
+        <div v-if="event?.incident" class="text-caption">
+          {{ event.incident.type.replace(/_/g, ' ') }} · {{ event.incident.address ?? '' }}
         </div>
       </div>
     </div>

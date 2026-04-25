@@ -13,7 +13,8 @@ Why enrichment happens here (not in the trigger):
 Fallback behaviour:
     If the DB query fails (e.g. transient connection error), the enricher
     falls back to returning the raw payload fields wrapped in the schema.
-    The SSE event is still delivered — just without incident metadata.
+    The SSE event is still delivered — just without incident metadata,
+    and with ``adjuster`` set to ``None``.
 
 Usage (injected into route handlers via FastAPI ``Depends``):
     >>> async def adjuster_stream(
@@ -31,7 +32,12 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..repositories.assignment_repository import AssignmentRepository
-from ..schemas.notification import EnrichedAssignmentEvent
+from ..schemas.notification import (
+    AdjusterInfo,
+    EnrichedAssignmentEvent,
+    IncidentInfo,
+    RouteInfo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +59,9 @@ class Enricher:
     async def enrich(self, payload: dict) -> EnrichedAssignmentEvent:
         """Hydrate a raw broadcaster payload into a full SSE event schema.
 
-        Attempts a DB JOIN to add incident fields.  Falls back to building
-        the schema from the payload alone if the DB lookup fails or returns
-        no rows.
+        Attempts a DB JOIN to add incident and adjuster fields.  Falls back
+        to building the schema from the payload alone if the DB lookup fails
+        or returns no rows (``adjuster`` will be ``None`` in that case).
 
         Args:
             payload: Raw dict from the broadcaster queue.  Must contain at
@@ -69,26 +75,37 @@ class Enricher:
         try:
             enriched = await self._repo.get_enriched(int(payload["assignment_id"]))
             if enriched is not None:
+                route = None
+                if enriched.route_polyline is not None:
+                    route = RouteInfo(
+                        polyline=enriched.route_polyline,
+                        provider=enriched.route_provider,
+                        distance_m=enriched.route_distance_m,
+                        duration_s=enriched.route_duration_s,
+                        traffic_segments=enriched.route_traffic_segments,
+                    )
                 return EnrichedAssignmentEvent(
                     assignment_id=enriched.assignment_id,
-                    adjuster_id=enriched.adjuster_id,
-                    incident_id=enriched.incident_id,
                     status=enriched.status,
                     event_type=payload.get("event", "assignment.updated"),
                     distance_km=enriched.distance_km,
                     travel_time_minutes=enriched.travel_time_minutes,
                     assigned_at=enriched.assigned_at,
-                    route_polyline=enriched.route_polyline,
-                    route_provider=enriched.route_provider,
-                    route_distance_m=enriched.route_distance_m,
-                    route_duration_s=enriched.route_duration_s,
-                    route_traffic_segments=enriched.route_traffic_segments,
-                    incident_type=enriched.incident_type,
-                    severity=enriched.severity,
-                    description=enriched.description,
-                    address=enriched.address,
-                    latitude=enriched.latitude,
-                    longitude=enriched.longitude,
+                    incident=IncidentInfo(
+                        id=enriched.incident_id,
+                        type=enriched.incident_type,
+                        severity=enriched.severity,
+                        description=enriched.description,
+                        address=enriched.address,
+                        latitude=enriched.latitude,
+                        longitude=enriched.longitude,
+                    ),
+                    adjuster=AdjusterInfo(
+                        id=enriched.adjuster_id,
+                        latitude=enriched.adjuster_lat,
+                        longitude=enriched.adjuster_lon,
+                    ),
+                    route=route,
                 )
         except Exception:
             logger.exception(
@@ -96,24 +113,34 @@ class Enricher:
                 payload.get("assignment_id"),
             )
 
-        # Fallback: build from raw payload fields (no incident join)
+        # Fallback: build from raw payload fields (no incident/adjuster join).
+        # adjuster is omitted (None) since home coords are not in the pg_notify payload.
+        raw_polyline = payload.get("route_polyline")
+        route = None
+        if raw_polyline is not None:
+            route = RouteInfo(
+                polyline=raw_polyline,
+                provider=payload.get("route_provider"),
+                distance_m=payload.get("route_distance_m"),
+                duration_s=payload.get("route_duration_s"),
+                traffic_segments=payload.get("route_traffic_segments"),
+            )
         return EnrichedAssignmentEvent(
             assignment_id=int(payload["assignment_id"]),
-            adjuster_id=int(payload["adjuster_id"]),
-            incident_id=int(payload["incident_id"]),
             status=payload["status"],
             event_type=payload.get("event", "assignment.updated"),
             distance_km=payload.get("distance_km"),
             travel_time_minutes=payload.get("travel_time_minutes"),
             assigned_at=payload.get("assigned_at"),
-            route_polyline=payload.get("route_polyline"),
-            route_provider=payload.get("route_provider"),
-            route_distance_m=payload.get("route_distance_m"),
-            route_duration_s=payload.get("route_duration_s"),
-            incident_type=payload.get("incident_type", "unknown"),
-            severity=int(payload.get("severity", 0)),
-            description=payload.get("description"),
-            address=payload.get("address"),
-            latitude=float(payload.get("latitude", 0.0)),
-            longitude=float(payload.get("longitude", 0.0)),
+            incident=IncidentInfo(
+                id=int(payload.get("incident_id", 0)),
+                type=payload.get("incident_type", "unknown"),
+                severity=int(payload.get("severity", 0)),
+                description=payload.get("description"),
+                address=payload.get("address"),
+                latitude=float(payload.get("latitude", 0.0)),
+                longitude=float(payload.get("longitude", 0.0)),
+            ),
+            adjuster=None,
+            route=route,
         )

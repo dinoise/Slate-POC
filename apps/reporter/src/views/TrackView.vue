@@ -25,8 +25,8 @@ watch(sseEvent, (ev) => {
   store.applySSEEvent(ev)
 
   // Draw route from SSE polyline (already decoded by notifications enricher)
-  if (ev.route_polyline && map) {
-    drawPolyline(decodePolyline(ev.route_polyline))
+  if (ev.route?.polyline && map) {
+    drawPolyline(decodePolyline(ev.route.polyline))
   }
 
   // Clear route and adjuster marker on terminal status

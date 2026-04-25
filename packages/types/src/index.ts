@@ -172,29 +172,45 @@ export interface TrafficSegment {
 
 // ── SSE Events ────────────────────────────────────────────────────────────────
 
-export interface AssignmentEvent {
-  assignment_id: number
-  adjuster_id: number
-  incident_id: number
-  incident_type: IncidentType
+export interface IncidentInfo {
+  id: number
+  type: IncidentType
   severity: SeverityLevel
   description: string | null
   address: string | null
   latitude: number
   longitude: number
+}
+
+export interface AdjusterInfo {
+  id: number
+  /** Home latitude from adjusters table — always present. */
+  latitude: number
+  /** Home longitude from adjusters table — always present. */
+  longitude: number
+}
+
+export interface RouteInfo {
+  polyline: string | null
+  provider: string | null
+  distance_m: number | null
+  duration_s: number | null
+  traffic_segments: TrafficSegment[] | null
+}
+
+export interface AssignmentEvent {
+  assignment_id: number
+  status: AssignmentStatus
+  /** Discriminator — 'assignment.created' | 'assignment.updated' */
+  event_type?: string
+  assigned_at: string
   distance_km: number | null
   travel_time_minutes: number | null
-  status: AssignmentStatus
-  assigned_at: string
-  // Discriminator — 'assignment.created' | 'assignment.updated'
-  // Present in outbox-sourced events; may be absent in legacy pg_notify events
-  event_type?: string
-  // Route fields — present once route-fetching job has run
-  route_polyline: string | null
-  route_provider: string | null
-  route_distance_m: number | null
-  route_duration_s: number | null
-  route_traffic_segments: TrafficSegment[] | null
+  incident: IncidentInfo
+  /** Home position of the assigned adjuster — null on enrichment fallback. */
+  adjuster: AdjusterInfo | null
+  /** Route data — null until route-fetching job runs. */
+  route: RouteInfo | null
 }
 
 // ── Observatory ───────────────────────────────────────────────────────────────
