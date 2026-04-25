@@ -31,7 +31,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..repositories.assignment_repository import AssignmentRepository
+from ..repositories.assignment_repository import AssignmentRepository, EnrichedAssignment
 from ..schemas.notification import (
     AdjusterInfo,
     EnrichedAssignmentEvent,
@@ -56,6 +56,58 @@ class Enricher:
     def __init__(self, db: AsyncSession) -> None:
         self._repo = AssignmentRepository(db)
 
+    @staticmethod
+    def build_from_enriched(
+        enriched: EnrichedAssignment,
+        event_type: str = "assignment.updated",
+    ) -> EnrichedAssignmentEvent:
+        """Build an ``EnrichedAssignmentEvent`` from a pre-joined DB projection.
+
+        Pure function — no DB access, no async.  Shared by the per-event
+        stream path (``enrich``) and the bulk snapshot endpoint so both
+        always produce identical output shapes.
+
+        Args:
+            enriched: Flat projection returned by ``AssignmentRepository``.
+            event_type: Discriminator string; defaults to
+                ``'assignment.updated'``.
+
+        Returns:
+            A fully populated ``EnrichedAssignmentEvent``.
+        """
+        route = None
+        if enriched.route_polyline is not None:
+            route = RouteInfo(
+                polyline=enriched.route_polyline,
+                provider=enriched.route_provider,
+                distance_m=enriched.route_distance_m,
+                duration_s=enriched.route_duration_s,
+                traffic_segments=enriched.route_traffic_segments,
+            )
+        return EnrichedAssignmentEvent(
+            assignment_id=enriched.assignment_id,
+            status=enriched.status,
+            event_type=event_type,
+            distance_km=enriched.distance_km,
+            travel_time_minutes=enriched.travel_time_minutes,
+            assigned_at=enriched.assigned_at,
+            incident=IncidentInfo(
+                id=enriched.incident_id,
+                type=enriched.incident_type,
+                severity=enriched.severity,
+                description=enriched.description,
+                address=enriched.address,
+                latitude=enriched.latitude,
+                longitude=enriched.longitude,
+            ),
+            adjuster=AdjusterInfo(
+                id=enriched.adjuster_id,
+                latitude=enriched.adjuster_lat,
+                longitude=enriched.adjuster_lon,
+            ),
+            route=route,
+        )
+
     async def enrich(self, payload: dict) -> EnrichedAssignmentEvent:
         """Hydrate a raw broadcaster payload into a full SSE event schema.
 
@@ -75,37 +127,9 @@ class Enricher:
         try:
             enriched = await self._repo.get_enriched(int(payload["assignment_id"]))
             if enriched is not None:
-                route = None
-                if enriched.route_polyline is not None:
-                    route = RouteInfo(
-                        polyline=enriched.route_polyline,
-                        provider=enriched.route_provider,
-                        distance_m=enriched.route_distance_m,
-                        duration_s=enriched.route_duration_s,
-                        traffic_segments=enriched.route_traffic_segments,
-                    )
-                return EnrichedAssignmentEvent(
-                    assignment_id=enriched.assignment_id,
-                    status=enriched.status,
+                return self.build_from_enriched(
+                    enriched,
                     event_type=payload.get("event", "assignment.updated"),
-                    distance_km=enriched.distance_km,
-                    travel_time_minutes=enriched.travel_time_minutes,
-                    assigned_at=enriched.assigned_at,
-                    incident=IncidentInfo(
-                        id=enriched.incident_id,
-                        type=enriched.incident_type,
-                        severity=enriched.severity,
-                        description=enriched.description,
-                        address=enriched.address,
-                        latitude=enriched.latitude,
-                        longitude=enriched.longitude,
-                    ),
-                    adjuster=AdjusterInfo(
-                        id=enriched.adjuster_id,
-                        latitude=enriched.adjuster_lat,
-                        longitude=enriched.adjuster_lon,
-                    ),
-                    route=route,
                 )
         except Exception:
             logger.exception(

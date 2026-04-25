@@ -14,6 +14,7 @@ import type {
   AssignmentStatus,
   RecommendationRequest,
   RecommendationResponse,
+  AssignmentEvent,
 } from '@slate/types'
 
 
@@ -166,6 +167,25 @@ export const settingsApi = {
       method: 'PUT',
       body: JSON.stringify({ provider }),
     }),
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+const _notifUrl = () =>
+  (import.meta as ImportMeta & { env: { VITE_NOTIFICATIONS_URL: string } }).env.VITE_NOTIFICATIONS_URL ?? ''
+
+export const notificationsApi = {
+  /** Snapshot of all currently active assignments — same shape as SSE events.
+   *  Call once on mount before opening the SSE stream. Uses Bearer header
+   *  (not ?token=) since this is a regular REST fetch, not EventSource. */
+  observatorySnapshot(): Promise<AssignmentEvent[]> {
+    const headers: Record<string, string> = {}
+    if (_authToken) headers['Authorization'] = `Bearer ${_authToken}`
+    return fetch(`${_notifUrl()}/notifications/snapshot/observatory`, { headers }).then((r) => {
+      if (!r.ok) throw new Error(`snapshot ${r.status}`)
+      return r.json() as Promise<AssignmentEvent[]>
+    })
+  },
 }
 
 // ── Recommendations ───────────────────────────────────────────────────────────

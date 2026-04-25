@@ -9,6 +9,11 @@ from sqlalchemy.future import select
 from slate_core.models import Assignment, Incident
 from slate_core.models.adjuster import Adjuster
 
+# Active statuses — assignments that should appear on the observatory map.
+# Mirrors slate_api/core/enums.py:ACTIVE_ASSIGNMENT_STATUSES; each service
+# owns its own copy to avoid cross-service imports.
+_ACTIVE_STATUSES = frozenset({"assigned", "accepted", "en_route", "arrived", "in_progress"})
+
 
 @dataclass
 class EnrichedAssignment:
@@ -83,3 +88,52 @@ class AssignmentRepository:
             adjuster_lat=adjuster.home_latitude,
             adjuster_lon=adjuster.home_longitude,
         )
+
+    async def get_all_active_enriched(self) -> list[EnrichedAssignment]:
+        """Return enriched projections for all currently active assignments.
+
+        Same three-table JOIN as ``get_enriched`` but without the
+        ``WHERE id = ?`` filter — returns every assignment whose status
+        is considered active (assigned, accepted, en_route, arrived,
+        in_progress).
+
+        Used by the snapshot endpoint to populate the observatory map on
+        initial load, before the SSE stream has delivered any events.
+
+        Returns:
+            List of ``EnrichedAssignment`` dataclasses, one per active
+            assignment.  Empty list when no active assignments exist.
+        """
+        result = await self.db.execute(
+            select(Assignment, Incident, Adjuster)
+            .join(Incident, Incident.id == Assignment.incident_id)
+            .join(Adjuster, Adjuster.id == Assignment.adjuster_id)
+            .where(Assignment.status.in_(_ACTIVE_STATUSES))
+            .order_by(Assignment.assigned_at.desc())
+        )
+        rows = result.all()
+        return [
+            EnrichedAssignment(
+                assignment_id=a.id,
+                adjuster_id=a.adjuster_id,
+                incident_id=a.incident_id,
+                status=a.status,
+                distance_km=a.distance_km,
+                travel_time_minutes=a.travel_time_minutes,
+                assigned_at=a.assigned_at,
+                route_polyline=a.route_polyline,
+                route_provider=a.route_provider,
+                route_distance_m=a.route_distance_m,
+                route_duration_s=a.route_duration_s,
+                route_traffic_segments=a.route_traffic_segments,
+                incident_type=inc.incident_type,
+                severity=inc.severity,
+                description=inc.description,
+                address=inc.address,
+                latitude=inc.latitude,
+                longitude=inc.longitude,
+                adjuster_lat=adj.home_latitude,
+                adjuster_lon=adj.home_longitude,
+            )
+            for a, inc, adj in rows
+        ]

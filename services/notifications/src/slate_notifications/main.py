@@ -34,7 +34,7 @@ from slate_infra.auth import make_verify_google_token, verify_google_token
 from .core.config import settings
 from .core.database import async_session_maker
 from .core.logging import setup_logging
-from .routes import stream_router
+from .routes import snapshot_router, stream_router
 from .services import broadcaster as broadcaster_module
 from .services import listener, outbox_poller
 
@@ -109,3 +109,4 @@ async def health() -> dict[str, str]:
 
 
 app.include_router(stream_router)
+app.include_router(snapshot_router)

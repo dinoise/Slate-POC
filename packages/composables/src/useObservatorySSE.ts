@@ -1,7 +1,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { AssignmentEvent } from '@slate/types'
 import { ACTIVE_ASSIGNMENT_STATUSES } from '@slate/types'
-import { getAuthToken } from '@slate/api-client'
+import { getAuthToken, notificationsApi } from '@slate/api-client'
 
 export interface UseObservatorySSEReturn {
   /** All known assignments keyed by id — updated in place on each event. */
@@ -26,6 +26,14 @@ export interface UseObservatorySSEReturn {
  * new event replaces the previous state of the same assignment — the map
  * always reflects the current state of every known assignment.
  *
+ * Startup pattern — Snapshot REST + Delta SSE:
+ *   1. Open EventSource first — events are queued in memory.
+ *   2. Fetch GET /notifications/snapshot/observatory (atomic bulk state).
+ *   3. After snapshot resolves, populate the map from snapshot, then replay
+ *      queued events with assigned_at >= snapshot fetch start time (newer
+ *      events win over snapshot; older events already covered by snapshot
+ *      are discarded).
+ *
  * Reconnects automatically with exponential backoff (1s → 60s max).
  */
 export function useObservatorySSE() {
@@ -37,6 +45,11 @@ export function useObservatorySSE() {
   let source: EventSource | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let backoff = 1000
+
+  // Snapshot load state — reset on each connect() call
+  let _snapshotLoaded = false
+  let _eventQueue: AssignmentEvent[] = []
+  let _snapshotStartedAt = ''
 
   const notificationsUrl =
     (import.meta as ImportMeta & { env: { VITE_NOTIFICATIONS_URL?: string } }).env
@@ -65,10 +78,7 @@ export function useObservatorySSE() {
     return getAuthToken() ?? sessionStorage.getItem('gid_token')
   }
 
-  function connect() {
-    _close()
-    backoff = 1000
-
+  function _openSSE() {
     const token = _getToken()
     const params = new URLSearchParams()
     if (token) params.set('token', token)
@@ -85,9 +95,15 @@ export function useObservatorySSE() {
     source.addEventListener('assignment', (e: MessageEvent) => {
       try {
         const event = JSON.parse(e.data) as AssignmentEvent
-        // Replace previous state for this assignment — map always has latest
-        assignments.value = new Map(assignments.value).set(event.assignment_id, event)
         lastEventAt.value = new Date().toISOString()
+
+        if (!_snapshotLoaded) {
+          // Snapshot still in flight — queue the event for later replay
+          _eventQueue.push(event)
+        } else {
+          // Snapshot already applied — update map directly
+          assignments.value = new Map(assignments.value).set(event.assignment_id, event)
+        }
       } catch {
         // malformed payload — ignore
       }
@@ -104,6 +120,55 @@ export function useObservatorySSE() {
         connect()
       }, backoff)
     }
+  }
+
+  async function _loadSnapshot() {
+    try {
+      const snapshot = await notificationsApi.observatorySnapshot()
+      const map = new Map<number, AssignmentEvent>()
+
+      // Populate from snapshot — atomic state captured in DB at fetch time
+      for (const ev of snapshot) {
+        map.set(ev.assignment_id, ev)
+      }
+
+      // Replay queued SSE events: only apply those with assigned_at newer
+      // than when the snapshot fetch started — events already covered by
+      // the snapshot are discarded (snapshot is authoritative for them).
+      for (const ev of _eventQueue) {
+        if (!ev.assigned_at || ev.assigned_at >= _snapshotStartedAt) {
+          map.set(ev.assignment_id, ev)
+        }
+      }
+
+      assignments.value = map
+    } catch {
+      // Snapshot failed — accept whatever arrived via SSE during the attempt
+      const map = new Map(assignments.value)
+      for (const ev of _eventQueue) {
+        map.set(ev.assignment_id, ev)
+      }
+      assignments.value = map
+    } finally {
+      _snapshotLoaded = true
+      _eventQueue = []
+    }
+  }
+
+  async function connect() {
+    _close()
+    backoff = 1000
+
+    // Reset snapshot state for this connection attempt
+    _snapshotLoaded = false
+    _eventQueue = []
+    _snapshotStartedAt = new Date().toISOString()
+
+    // Open SSE first — events are queued while snapshot loads
+    _openSSE()
+
+    // Fetch snapshot in parallel; resolves the queue after
+    await _loadSnapshot()
   }
 
   onMounted(connect)
