@@ -1,0 +1,119 @@
+name: "Deploy — Agents (dev)"
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "services/agents/**"
+      - ".github/workflows/deploy-agents-dev.yaml"
+  workflow_dispatch:
+    inputs:
+      skip-tests:
+        description: "Omitir tests (solo en emergencias)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+  GOOGLE_CLOUD_LOCATION: us-central1
+  GCS_STAGING_BUCKET: gs://${{ vars.GCP_PROJECT_ID }}-agents-staging
+  ROOT_AGENT_MODEL: gemini-2.0-flash-001
+
+jobs:
+  # ── 1. Tests ──────────────────────────────────────────────────────────────────
+  test:
+    name: "Test"
+    if: ${{ !inputs.skip-tests }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/agents
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run tests
+        run: uv run pytest tests/ -q --tb=short
+
+  # ── 2. Deploy ─────────────────────────────────────────────────────────────────
+  deploy:
+    name: "Deploy to Agent Engine"
+    needs: [test]
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/agents
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies (with ADK)
+        run: uv sync
+
+      - name: Authenticate to GCP (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: poc-agents-deployer@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Validate environment
+        run: |
+          uv run python deployment/deploy.py --validate
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ env.GOOGLE_CLOUD_LOCATION }}
+          ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
+          GCS_STAGING_BUCKET: ${{ env.GCS_STAGING_BUCKET }}
+          SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
+
+      - name: Deploy to Vertex AI Agent Engine
+        id: deploy
+        run: |
+          # adk deploy agent_engine uploads the package to GCS staging bucket,
+          # creates/updates the ReasoningEngine, and prints the agent engine ID.
+          uv run adk deploy agent_engine \
+            --project=${{ env.GOOGLE_CLOUD_PROJECT }} \
+            --region=${{ env.GOOGLE_CLOUD_LOCATION }} \
+            --staging_bucket=${{ env.GCS_STAGING_BUCKET }} \
+            --display_name="slate-agents-dev" \
+            --env_vars="SLATE_API_URL=${{ secrets.SLATE_API_URL_DEV }},ROOT_AGENT_MODEL=${{ env.ROOT_AGENT_MODEL }}" \
+            src/slate_agents/agent.py 2>&1 | tee deploy_output.txt
+
+          # Extract the Agent Engine ID from the output for the health check
+          AGENT_ENGINE_ID=$(grep -oP 'reasoningEngines/\K[0-9]+' deploy_output.txt | tail -1)
+          echo "agent_engine_id=$AGENT_ENGINE_ID" >> "$GITHUB_OUTPUT"
+          echo "Deployed Agent Engine ID: $AGENT_ENGINE_ID"
+
+      - name: Health check
+        if: steps.deploy.outputs.agent_engine_id != ''
+        run: |
+          uv run python deployment/deploy.py \
+            --health \
+            --agent-engine-id=${{ steps.deploy.outputs.agent_engine_id }}
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ env.GOOGLE_CLOUD_LOCATION }}
