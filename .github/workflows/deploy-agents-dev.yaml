@@ -20,7 +20,6 @@ permissions:
 env:
   GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
   GOOGLE_CLOUD_LOCATION: us-central1
-  GCS_STAGING_BUCKET: gs://${{ secrets.GCP_PROJECT_ID }}-agents-staging
   ROOT_AGENT_MODEL: gemini-2.5-flash-lite
 
 jobs:
@@ -87,21 +86,28 @@ jobs:
           GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
           GOOGLE_CLOUD_LOCATION: ${{ env.GOOGLE_CLOUD_LOCATION }}
           ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
-          GCS_STAGING_BUCKET: ${{ env.GCS_STAGING_BUCKET }}
           SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
 
       - name: Deploy to Vertex AI Agent Engine
         id: deploy
         run: |
-          # adk deploy agent_engine uploads the package to GCS staging bucket,
-          # creates/updates the ReasoningEngine, and prints the agent engine ID.
+          # Write runtime env vars to a temp .env file passed via --env_file.
+          # adk deploy agent_engine does not accept --env_vars (removed in ADK 1.x).
+          cat > /tmp/agents_runtime.env <<EOF
+          GOOGLE_GENAI_USE_VERTEXAI=1
+          GOOGLE_CLOUD_PROJECT=${{ env.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION=${{ env.GOOGLE_CLOUD_LOCATION }}
+          ROOT_AGENT_MODEL=${{ env.ROOT_AGENT_MODEL }}
+          SLATE_API_URL=${{ secrets.SLATE_API_URL_DEV }}
+          EOF
+
           uv run adk deploy agent_engine \
             --project=${{ env.GOOGLE_CLOUD_PROJECT }} \
             --region=${{ env.GOOGLE_CLOUD_LOCATION }} \
-            --staging_bucket=${{ env.GCS_STAGING_BUCKET }} \
             --display_name="slate-agents-dev" \
-            --env_vars="SLATE_API_URL=${{ secrets.SLATE_API_URL_DEV }},ROOT_AGENT_MODEL=${{ env.ROOT_AGENT_MODEL }}" \
-            src/slate_agents/agent.py 2>&1 | tee deploy_output.txt
+            --adk_app_object=app \
+            --env_file=/tmp/agents_runtime.env \
+            src/slate_agents/ 2>&1 | tee deploy_output.txt
 
           # Extract the Agent Engine ID from the output for the health check
           AGENT_ENGINE_ID=$(grep -oP 'reasoningEngines/\K[0-9]+' deploy_output.txt | tail -1)
