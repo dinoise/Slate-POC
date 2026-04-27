@@ -90,7 +90,10 @@ jobs:
 
       - name: Deploy to Vertex AI Agent Engine
         id: deploy
+        shell: bash
         run: |
+          set -euo pipefail  # fail fast; pipefail ensures tee doesn't swallow adk exit code
+
           # Write runtime env vars to a temp .env file passed via --env_file.
           # adk deploy agent_engine does not accept --env_vars (removed in ADK 1.x).
           cat > /tmp/agents_runtime.env <<EOF
