@@ -60,7 +60,7 @@ _KEEPALIVE_INTERVAL = 15  # seconds
 async def _event_generator(
     request: Request,
     channel: Channel,
-    entity_id: int,
+    entity_id: int | None,
     enricher: Enricher,
 ) -> object:
     """Yield SSE-formatted strings for as long as the client is connected.
@@ -76,7 +76,8 @@ async def _event_generator(
     Args:
         request: FastAPI request — used to detect client disconnection.
         channel: Broadcaster channel this stream is subscribed to.
-        entity_id: Entity ID (adjuster PK or incident PK) to watch.
+        entity_id: Entity ID (adjuster PK or incident PK) to watch, or
+            ``None`` for global channels that receive all events (e.g. OBSERVATORY).
         enricher: Enricher instance for DB-joining raw payloads.
 
     Yields:
@@ -99,7 +100,10 @@ async def _event_generator(
         pass
     finally:
         broadcaster.unsubscribe(channel, entity_id, queue)
-        logger.info("SSE stream closed — channel=%s entity_id=%d", channel.value, entity_id)
+        if entity_id is None:
+            logger.info("SSE stream closed — channel=%s (global)", channel.value)
+        else:
+            logger.info("SSE stream closed — channel=%s entity_id=%d", channel.value, entity_id)
 
 
 @router.get(
@@ -185,8 +189,8 @@ async def observatory_stream(
     """Open a global SSE stream for the admin observatory.
 
     Receives every assignment event regardless of adjuster or incident.
-    Uses ``Channel.OBSERVATORY`` with ``entity_id=0`` as the conventional
-    global key — the broadcaster fans out all payloads to this channel.
+    Subscribes with ``entity_id=None`` — the broadcaster delivers all
+    events published on any channel to global subscribers.
 
     Args:
         request: Injected by FastAPI — used for disconnect detection.
@@ -197,7 +201,7 @@ async def observatory_stream(
     """
     enricher = Enricher(db)
     return StreamingResponse(
-        _event_generator(request, Channel.OBSERVATORY, 0, enricher),
+        _event_generator(request, Channel.OBSERVATORY, None, enricher),
         media_type="text/event-stream",
         headers=_SSE_HEADERS,
     )

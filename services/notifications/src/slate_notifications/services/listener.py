@@ -92,6 +92,9 @@ def _make_handler(
                 if raw_id is None:
                     continue
                 await broadcaster.broadcast(target.channel, int(raw_id), data)
+            # Deliver to all global subscribers (e.g. OBSERVATORY) — these
+            # are not reachable via entity-specific targets above.
+            await broadcaster.broadcast_global(data)
         except Exception:
             logger.exception(
                 "Failed to process pg_notify on channel '%s': %.200s",
