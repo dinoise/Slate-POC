@@ -85,6 +85,7 @@ jobs:
         env:
           GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
           GOOGLE_CLOUD_LOCATION: ${{ env.GOOGLE_CLOUD_LOCATION }}
+          STAGING_BUCKET: gs://lennken-poc-agents-staging
           ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
           SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
 
@@ -128,6 +129,7 @@ jobs:
           GOOGLE_GENAI_USE_VERTEXAI: "1"
           GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
           GOOGLE_CLOUD_LOCATION: ${{ env.GOOGLE_CLOUD_LOCATION }}
+          STAGING_BUCKET: gs://lennken-poc-agents-staging
           ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
           SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
 

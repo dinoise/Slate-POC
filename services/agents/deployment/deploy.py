@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 REQUIRED_ENV_VARS = [
     "GOOGLE_CLOUD_PROJECT",
     "GOOGLE_CLOUD_LOCATION",
+    "STAGING_BUCKET",
     "ROOT_AGENT_MODEL",
     "SLATE_API_URL",
 ]
@@ -86,7 +87,7 @@ def create_agent() -> str:
 
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     location = os.environ["GOOGLE_CLOUD_LOCATION"]
-    vertexai.init(project=project, location=location)
+    vertexai.init(project=project, location=location, staging_bucket=os.environ["STAGING_BUCKET"])
 
     adk_app = _build_adk_app()
     display_name = _versioned_name("slate-agents-dev")
@@ -110,7 +111,7 @@ def update_agent(resource_id: str) -> str:
 
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     location = os.environ["GOOGLE_CLOUD_LOCATION"]
-    vertexai.init(project=project, location=location)
+    vertexai.init(project=project, location=location, staging_bucket=os.environ["STAGING_BUCKET"])
 
     resource_name = (
         f"projects/{project}/locations/{location}/reasoningEngines/{resource_id}"
@@ -141,7 +142,9 @@ def health_check(resource_id: str) -> bool:
 
         project = os.environ["GOOGLE_CLOUD_PROJECT"]
         location = os.environ["GOOGLE_CLOUD_LOCATION"]
-        vertexai.init(project=project, location=location)
+        vertexai.init(
+            project=project, location=location, staging_bucket=os.environ["STAGING_BUCKET"]
+        )
 
         from google.api_core.client_options import ClientOptions  # type: ignore[import-untyped]
         from google.cloud.aiplatform_v1beta1 import (  # type: ignore[import-untyped]
