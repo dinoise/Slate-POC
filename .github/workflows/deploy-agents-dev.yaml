@@ -74,7 +74,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: poc-agents-deployer@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          service_account: poc-deployer@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
 
       - name: Set up gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
