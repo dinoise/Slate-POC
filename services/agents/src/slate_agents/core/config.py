@@ -7,15 +7,24 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_SERVICE_ROOT = Path(__file__).parents[4]  # services/agents/
 _ENV = os.getenv("ENVIRONMENT", "development")
+
+# Resolve .env only for local dev — walk up from this file to find the service
+# root (services/agents/). In Agent Engine the package is copied flat into
+# /code/ with a temp name, so parents[4] would not exist; we guard with exists().
+_SERVICE_ROOT = Path(__file__).parent
+for _ in range(4):
+    _SERVICE_ROOT = _SERVICE_ROOT.parent
+
+_LOCAL_ENV_FILE = str(_SERVICE_ROOT / ".env") if (_SERVICE_ROOT / ".env").exists() else ""
+_TEST_ENV_FILE = str(_SERVICE_ROOT / ".env.test") if (_SERVICE_ROOT / ".env.test").exists() else ""
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file={
-            "development": str(_SERVICE_ROOT / ".env"),
-            "test": str(_SERVICE_ROOT / ".env.test"),
+            "development": _LOCAL_ENV_FILE,
+            "test": _TEST_ENV_FILE,
         }.get(_ENV, ""),
         env_file_encoding="utf-8",
         case_sensitive=False,
