@@ -36,6 +36,11 @@ export function onUnauthorized(fn: () => void): void {
   _onUnauthorized = fn
 }
 
+/** Invoke the registered unauthorized callback (e.g. from SSE composables that detect 401). */
+export function triggerUnauthorized(): void {
+  _onUnauthorized?.()
+}
+
 // ── Base fetch ────────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {

@@ -1,6 +1,7 @@
 import { ref, watch, onUnmounted, type Ref } from 'vue'
+import { SSE, type SSEvent } from 'sse.js'
 import type { AssignmentEvent } from '@slate/types'
-import { getAuthToken } from '@slate/api-client'
+import { getAuthToken, triggerUnauthorized } from '@slate/api-client'
 
 export interface UseSSEReturn {
   events: Ref<AssignmentEvent[]>
@@ -12,25 +13,24 @@ export interface UseSSEReturn {
 /**
  * Reactive SSE composable with exponential backoff reconnection.
  *
- * Connects to the notifications service stream for a given adjuster.
- * Automatically reconnects on failure with backoff (1s → 2s → 4s … max 60s).
- * Watches `adjusterId` — when it changes, the old connection is closed and a
- * new one is opened for the new adjuster. If `adjusterId` becomes null the
- * stream is disconnected until a new value arrives.
+ * Uses sse.js instead of native EventSource so that:
+ * - The auth token is sent as `Authorization: Bearer` header (not ?token= in URL)
+ * - HTTP status codes are exposed in onerror via event.responseCode — 401/403
+ *   triggers triggerUnauthorized() and stops reconnecting
+ * - Works cross-browser (Firefox + Chromium) — sse.js uses XHR internally
+ * - Network drops and 5xx errors reconnect with exponential backoff (1s → 60s)
  *
- * The native EventSource does not support custom headers — the auth token is
- * passed as a `?token=` query parameter (handled by the notifications service).
+ * Watches `adjusterId` — when it changes the old connection is closed and a
+ * new one is opened. If `adjusterId` becomes null the stream is disconnected.
  */
 export function useSSE(adjusterId: Ref<number | null>): UseSSEReturn {
   const events = ref<AssignmentEvent[]>([])
   const connected = ref(false)
   const error = ref<string | null>(null)
 
-  let source: EventSource | null = null
+  let source: SSE | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let backoff = 1000
-  // Track which adjuster the open connection belongs to so reconnect logic
-  // doesn't re-open a stale connection after the adjuster has been swapped out.
   let connectedFor: number | null = null
 
   const notificationsUrl =
@@ -46,66 +46,65 @@ export function useSSE(adjusterId: Ref<number | null>): UseSSEReturn {
     source = null
     connected.value = false
     connectedFor = null
-    // Clear stale events so a new adjuster selection starts fresh
     events.value = []
   }
 
   function connect() {
     const id = adjusterId.value
-    if (!id) {
-      _close()
-      return
-    }
+    if (!id) { _close(); return }
 
     _close()
     backoff = 1000
     connectedFor = id
 
     const token = getAuthToken()
-    const params = new URLSearchParams()
-    if (token) params.set('token', token)
-    const qs = params.toString() ? `?${params}` : ''
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
 
-    source = new EventSource(`${notificationsUrl}/notifications/stream/adjusters/${id}${qs}`)
+    source = new SSE(`${notificationsUrl}/notifications/stream/adjusters/${id}`, {
+      headers,
+      autoReconnect: false,   // we handle reconnect with our own backoff timer
+    })
 
-    source.addEventListener('connected', () => {
+    source.onopen = () => {
       connected.value = true
       error.value = null
       backoff = 1000
-    })
+    }
 
-    source.addEventListener('assignment', (e: MessageEvent) => {
+    source.addEventListener('assignment', (e: SSEvent) => {
       try {
         const payload = JSON.parse(e.data) as AssignmentEvent
         events.value = [payload, ...events.value].slice(0, 50)
-      } catch {
-        // malformed payload — ignore
-      }
+      } catch { /* malformed payload — ignore */ }
     })
 
-    source.onerror = () => {
-      // If the adjuster changed while we were waiting for this error, don't
-      // schedule a reconnect for the old adjuster.
+    source.onerror = (e: SSEvent) => {
+      // Auth errors — stop retrying
+      if (e.responseCode === 401 || e.responseCode === 403) {
+        triggerUnauthorized()
+        source?.close()
+        source = null
+        return
+      }
+      // Adjuster changed while reconnecting — stop this loop
       if (connectedFor !== id) return
 
       connected.value = false
+      error.value = `Connection lost. Reconnecting in ${backoff / 1000}s…`
       source?.close()
       source = null
-
-      error.value = `Connection lost. Reconnecting in ${backoff / 1000}s…`
       reconnectTimer = setTimeout(() => {
         backoff = Math.min(backoff * 2, 60_000)
         connect()
       }, backoff)
     }
+
+    source.stream()
   }
 
-  // React to adjuster changes (including null → id and id → different id).
   watch(adjusterId, (newId) => {
-    if (!newId) {
-      _close()
-      return
-    }
+    if (!newId) { _close(); return }
     connect()
   }, { immediate: true })
 

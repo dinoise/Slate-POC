@@ -1,6 +1,7 @@
 import { ref, watch, onUnmounted, type Ref } from 'vue'
+import { SSE, type SSEvent } from 'sse.js'
 import type { AssignmentEvent } from '@slate/types'
-import { getAuthToken } from '@slate/api-client'
+import { getAuthToken, triggerUnauthorized } from '@slate/api-client'
 
 export interface UseIncidentSSEReturn {
   event: Ref<AssignmentEvent | null>
@@ -11,17 +12,20 @@ export interface UseIncidentSSEReturn {
 
 /**
  * SSE composable for the reporter — subscribes to assignment events for a
- * specific incident via /notifications/stream/incident?incident_id=X.
+ * specific incident via /notifications/stream/incidents/{id}.
  *
- * Mirrors useSSE but keyed by incident_id instead of adjuster_id.
- * Auth token is passed as ?token= (EventSource does not support headers).
+ * Uses sse.js instead of native EventSource so that:
+ * - The auth token is sent as `Authorization: Bearer` header
+ * - 401/403 triggers triggerUnauthorized() and stops reconnecting
+ * - Works cross-browser (Firefox + Chromium) — sse.js uses XHR internally
+ * - Network drops reconnect with exponential backoff (1s → 60s)
  */
 export function useIncidentSSE(incidentId: Ref<number | null>): UseIncidentSSEReturn {
   const event = ref<AssignmentEvent | null>(null)
   const connected = ref(false)
   const error = ref<string | null>(null)
 
-  let source: EventSource | null = null
+  let source: SSE | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let backoff = 1000
   let connectedFor: number | null = null
@@ -43,47 +47,55 @@ export function useIncidentSSE(incidentId: Ref<number | null>): UseIncidentSSERe
 
   function connect() {
     const id = incidentId.value
-    if (!id) {
-      _close()
-      return
-    }
+    if (!id) { _close(); return }
 
     _close()
     backoff = 1000
     connectedFor = id
 
     const token = getAuthToken()
-    const params = new URLSearchParams()
-    if (token) params.set('token', token)
-    const qs = params.toString() ? `?${params}` : ''
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
 
-    source = new EventSource(`${notificationsUrl}/notifications/stream/incidents/${id}${qs}`)
+    source = new SSE(`${notificationsUrl}/notifications/stream/incidents/${id}`, {
+      headers,
+      autoReconnect: false,   // we handle reconnect with our own backoff timer
+    })
 
-    source.addEventListener('connected', () => {
+    source.onopen = () => {
       connected.value = true
       error.value = null
       backoff = 1000
-    })
+    }
 
-    source.addEventListener('assignment', (e: MessageEvent) => {
+    source.addEventListener('assignment', (e: SSEvent) => {
       try {
         event.value = JSON.parse(e.data) as AssignmentEvent
-      } catch {
-        // malformed payload — ignore
-      }
+      } catch { /* malformed payload — ignore */ }
     })
 
-    source.onerror = () => {
+    source.onerror = (e: SSEvent) => {
+      // Auth errors — stop retrying
+      if (e.responseCode === 401 || e.responseCode === 403) {
+        triggerUnauthorized()
+        source?.close()
+        source = null
+        return
+      }
+      // Incident changed while reconnecting — stop this loop
       if (connectedFor !== id) return
+
       connected.value = false
+      error.value = `Conexión perdida. Reconectando en ${backoff / 1000}s…`
       source?.close()
       source = null
-      error.value = `Conexión perdida. Reconectando en ${backoff / 1000}s…`
       reconnectTimer = setTimeout(() => {
         backoff = Math.min(backoff * 2, 60_000)
         connect()
       }, backoff)
     }
+
+    source.stream()
   }
 
   watch(incidentId, (newId) => {

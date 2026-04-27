@@ -80,15 +80,25 @@ export function useGoogleAuth() {
     if (_initialized) return
     _initialized = true
 
-    // When any API request returns 401, clear the session and re-prompt
+    // When any API request or SSE connection returns 401, clear the session and
+    // redirect to login. One Tap re-auth is attempted first; if it doesn't
+    // succeed within 500ms (e.g. suppressed by browser) the user is redirected.
     onUnauthorized(() => {
       sessionStorage.removeItem('gid_token')
       setAuthToken(null)
       user.value = null
-      // Re-trigger One Tap — Google will silently re-issue if the user has an active session
+
       if (window.google) {
         window.google.accounts.id.prompt()
-        setTimeout(() => { if (!user.value) promptSuppressed.value = true }, 500)
+        // Give One Tap 500ms to silently re-auth; if it doesn't, redirect to login
+        setTimeout(() => {
+          if (!user.value) {
+            window.location.href = '/login'
+          }
+        }, 500)
+      } else {
+        // One Tap not available — redirect immediately
+        window.location.href = '/login'
       }
     })
 

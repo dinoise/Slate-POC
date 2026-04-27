@@ -11,13 +11,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@slate/api-client": "workspace:*",
-    "@slate/types": "workspace:*",
     "@deck.gl/core": "^9.0.0",
     "@deck.gl/geo-layers": "^9.0.0",
     "@deck.gl/layers": "^9.0.0",
     "@deck.gl/mapbox": "^9.0.0",
+    "@slate/api-client": "workspace:*",
+    "@slate/types": "workspace:*",
     "maplibre-gl": "^5.0.0",
+    "sse.js": "^2.8.0",
     "vue": "^3.4.0"
   },
   "devDependencies": {
