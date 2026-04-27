@@ -1,22 +1,14 @@
-"""Deployment helper for slate-agents.
+"""Deployment script for slate-agents on Vertex AI Agent Engine.
 
-This script is a complement to `adk deploy agent_engine` — it provides
-pre-deploy validation and post-deploy health checks.
+Uses the Vertex AI Python SDK directly (vertexai.agent_engines) instead of
+`adk deploy agent_engine` CLI, which has a bug in 1.31.x where deploymentSpec
+is serialized empty causing 500 INTERNAL from the Vertex AI API.
 
 Usage:
-    # Validate env vars before deploying
     python deployment/deploy.py --validate
-
-    # Check Agent Engine health after deploy
-    python deployment/deploy.py --health --agent-engine-id <id>
-
-    # Full validate + deploy + health check (called by CI workflow)
-    python deployment/deploy.py --validate
-    adk deploy agent_engine ...
-    python deployment/deploy.py --health --agent-engine-id <id>
-
-Note: The actual deploy is handled by `adk deploy agent_engine` CLI.
-This script only handles validation and health checks.
+    python deployment/deploy.py --create
+    python deployment/deploy.py --update --resource-id <id>
+    python deployment/deploy.py --health --resource-id <id>
 """
 
 from __future__ import annotations
@@ -25,11 +17,27 @@ import argparse
 import logging
 import os
 import sys
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
 logger = logging.getLogger(__name__)
 
 REQUIRED_ENV_VARS = [
+    "GOOGLE_CLOUD_PROJECT",
+    "GOOGLE_CLOUD_LOCATION",
+    "ROOT_AGENT_MODEL",
+    "SLATE_API_URL",
+]
+
+REQUIREMENTS: list[str] = [
+    "google-cloud-aiplatform[adk,agent_engines]>=1.118.0",
+    "google-adk>=1.31.1",
+    "pydantic-settings>=2.0.0",
+    "httpx>=0.27.0",
+]
+
+_RUNTIME_VAR_NAMES = [
+    "GOOGLE_GENAI_USE_VERTEXAI",
     "GOOGLE_CLOUD_PROJECT",
     "GOOGLE_CLOUD_LOCATION",
     "ROOT_AGENT_MODEL",
@@ -48,37 +56,116 @@ def validate() -> bool:
     return True
 
 
-def health_check(agent_engine_id: str) -> bool:
+def _build_adk_app():  # type: ignore[return]
+    """Wrap the App object in AdkApp for Agent Engine deployment."""
+    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+
+    from vertexai.agent_engines import AdkApp  # type: ignore[import-untyped]
+
+    from slate_agents import app  # App-wrapped root agent
+
+    return AdkApp(app=app, enable_tracing=True)
+
+
+def _env_vars() -> dict[str, str]:
+    return {k: os.environ[k] for k in _RUNTIME_VAR_NAMES if k in os.environ}
+
+
+def _versioned_name(base: str) -> str:
+    version = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    git_sha = os.getenv("GITHUB_SHA", "local")[:7]
+    return f"{base}-v{version}-{git_sha}"
+
+
+def create_agent() -> str:
+    """Create a new Agent Engine instance. Prints the numeric ID to stdout."""
+    import vertexai  # type: ignore[import-untyped]
+    from vertexai import agent_engines  # type: ignore[import-untyped]
+
+    project = os.environ["GOOGLE_CLOUD_PROJECT"]
+    location = os.environ["GOOGLE_CLOUD_LOCATION"]
+    vertexai.init(project=project, location=location)
+
+    adk_app = _build_adk_app()
+    display_name = _versioned_name("slate-agents-dev")
+
+    logger.info("Creating Agent Engine: %s", display_name)
+    remote = agent_engines.create(
+        agent_engine=adk_app,
+        requirements=REQUIREMENTS,
+        display_name=display_name,
+        env_vars=_env_vars(),
+    )
+    name = remote.api_resource.name
+    logger.info("Created Agent Engine: %s", name)
+    return name
+
+
+def update_agent(resource_id: str) -> str:
+    """Update an existing Agent Engine instance. Prints the numeric ID to stdout."""
+    import vertexai  # type: ignore[import-untyped]
+    from vertexai import agent_engines  # type: ignore[import-untyped]
+
+    project = os.environ["GOOGLE_CLOUD_PROJECT"]
+    location = os.environ["GOOGLE_CLOUD_LOCATION"]
+    vertexai.init(project=project, location=location)
+
+    resource_name = (
+        f"projects/{project}/locations/{location}/reasoningEngines/{resource_id}"
+        if not resource_id.startswith("projects/")
+        else resource_id
+    )
+
+    adk_app = _build_adk_app()
+    display_name = _versioned_name("slate-agents-dev")
+
+    logger.info("Updating Agent Engine: %s → %s", resource_name, display_name)
+    remote = agent_engines.update(
+        resource_name=resource_name,
+        agent_engine=adk_app,
+        requirements=REQUIREMENTS,
+        display_name=display_name,
+        env_vars=_env_vars(),
+    )
+    name = remote.api_resource.name
+    logger.info("Updated Agent Engine: %s", name)
+    return name
+
+
+def health_check(resource_id: str) -> bool:
     """Verify that the deployed Agent Engine is in ACTIVE state."""
     try:
         import vertexai  # type: ignore[import-untyped]
 
         project = os.environ["GOOGLE_CLOUD_PROJECT"]
         location = os.environ["GOOGLE_CLOUD_LOCATION"]
-
-        logger.info("Checking Agent Engine health: %s", agent_engine_id)
         vertexai.init(project=project, location=location)
 
-        # Use the ReasoningEngine resource to check state
-        from google.cloud.aiplatform_v1beta1 import (
-            ReasoningEngineServiceClient,  # type: ignore[import-untyped]
+        from google.api_core.client_options import ClientOptions  # type: ignore[import-untyped]
+        from google.cloud.aiplatform_v1beta1 import (  # type: ignore[import-untyped]
+            ReasoningEngineServiceClient,
         )
 
-        client = ReasoningEngineServiceClient()
-        resource_name = (
-            f"projects/{project}/locations/{location}/reasoningEngines/{agent_engine_id}"
+        client = ReasoningEngineServiceClient(
+            client_options=ClientOptions(api_endpoint=f"{location}-aiplatform.googleapis.com")
         )
-        engine = client.get_reasoning_engine(name=resource_name)
-
+        name = (
+            f"projects/{project}/locations/{location}/reasoningEngines/{resource_id}"
+            if not resource_id.startswith("projects/")
+            else resource_id
+        )
+        engine = client.get_reasoning_engine(name=name)
         state = engine.state.name if hasattr(engine, "state") else "UNKNOWN"
         logger.info("Agent Engine state: %s", state)
 
         if state == "ACTIVE":
             logger.info("Health check PASSED.")
             return True
-        else:
-            logger.error("Health check FAILED — unexpected state: %s", state)
-            return False
+
+        logger.error("Health check FAILED — unexpected state: %s", state)
+        return False
 
     except Exception as e:
         logger.error("Health check error: %s", e)
@@ -86,26 +173,42 @@ def health_check(agent_engine_id: str) -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="slate-agents deployment helper")
+    parser = argparse.ArgumentParser(description="slate-agents deployment")
     parser.add_argument("--validate", action="store_true", help="Validate env vars")
+    parser.add_argument("--create", action="store_true", help="Create new Agent Engine")
+    parser.add_argument("--update", action="store_true", help="Update existing Agent Engine")
     parser.add_argument("--health", action="store_true", help="Post-deploy health check")
-    parser.add_argument("--agent-engine-id", help="Agent Engine ID for health check")
+    parser.add_argument("--resource-id", help="Agent Engine numeric ID (for --update/--health)")
     args = parser.parse_args()
 
     if args.validate:
         if not validate():
             sys.exit(1)
+        return
+
+    if args.create:
+        name = create_agent()
+        print(name.split("/")[-1])  # numeric ID only — caller greps this
+        return
+
+    if args.update:
+        if not args.resource_id:
+            logger.error("--resource-id is required for --update")
+            sys.exit(1)
+        name = update_agent(args.resource_id)
+        print(name.split("/")[-1])
+        return
 
     if args.health:
-        if not args.agent_engine_id:
-            logger.error("--agent-engine-id is required for health check")
+        if not args.resource_id:
+            logger.error("--resource-id is required for --health")
             sys.exit(1)
-        if not health_check(args.agent_engine_id):
+        if not health_check(args.resource_id):
             sys.exit(1)
+        return
 
-    if not args.validate and not args.health:
-        parser.print_help()
-        sys.exit(1)
+    parser.print_help()
+    sys.exit(1)
 
 
 if __name__ == "__main__":

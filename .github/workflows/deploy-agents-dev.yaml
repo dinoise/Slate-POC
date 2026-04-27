@@ -108,46 +108,28 @@ jobs:
         id: deploy
         shell: bash
         run: |
-          set -euo pipefail  # fail fast; pipefail ensures tee doesn't swallow adk exit code
+          set -euo pipefail
 
-          # Write runtime env vars to a temp .env file passed via --env_file.
-          # adk deploy agent_engine does not accept --env_vars (removed in ADK 1.x).
-          cat > /tmp/agents_runtime.env <<EOF
-          GOOGLE_GENAI_USE_VERTEXAI=1
-          GOOGLE_CLOUD_PROJECT=${{ env.GOOGLE_CLOUD_PROJECT }}
-          GOOGLE_CLOUD_LOCATION=${{ env.GOOGLE_CLOUD_LOCATION }}
-          ROOT_AGENT_MODEL=${{ env.ROOT_AGENT_MODEL }}
-          SLATE_API_URL=${{ secrets.SLATE_API_URL_DEV }}
-          EOF
-
-          # Agent Engine needs a requirements.txt to populate deploymentSpec.
-          # Write to /tmp so the path is absolute and survives ADK's temp dir copy.
-          uv export --no-hashes --no-dev \
-            | grep -v "^-e " | grep -v "^\s*#" | grep -v "^$" \
-            > /tmp/agents_requirements.txt
-          echo "Generated $(wc -l < /tmp/agents_requirements.txt) packages"
-
-          # Pass --agent_engine_id if an existing instance was found → update instead of create
+          # Use deploy.py (Python SDK) instead of adk deploy agent_engine CLI.
+          # The CLI has a bug in 1.31.x where deploymentSpec is always empty,
+          # causing 500 INTERNAL on both CreateReasoningEngine and UpdateReasoningEngine.
           EXISTING_ID="${{ steps.resolve.outputs.existing_id }}"
-          AGENT_ENGINE_ID_FLAG=""
+
           if [ -n "$EXISTING_ID" ]; then
-            AGENT_ENGINE_ID_FLAG="--agent_engine_id=$EXISTING_ID"
+            AGENT_ENGINE_ID=$(uv run python deployment/deploy.py \
+              --update --resource-id="$EXISTING_ID")
+          else
+            AGENT_ENGINE_ID=$(uv run python deployment/deploy.py --create)
           fi
 
-          uv run adk deploy agent_engine \
-            --project=${{ env.GOOGLE_CLOUD_PROJECT }} \
-            --region=${{ env.GOOGLE_CLOUD_LOCATION }} \
-            --display_name="slate-agents-dev" \
-            --adk_app_object=app \
-            --env_file=/tmp/agents_runtime.env \
-            --requirements_file=/tmp/agents_requirements.txt \
-            $AGENT_ENGINE_ID_FLAG \
-            src/slate_agents/ 2>&1 | tee deploy_output.txt
-
-          # Extract the Agent Engine ID from the output for subsequent steps
-          AGENT_ENGINE_ID=$(grep -oP 'reasoningEngines/\K[0-9]+' deploy_output.txt | tail -1)
           echo "agent_engine_id=$AGENT_ENGINE_ID" >> "$GITHUB_OUTPUT"
           echo "Deployed Agent Engine ID: $AGENT_ENGINE_ID"
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: "1"
+          GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ env.GOOGLE_CLOUD_LOCATION }}
+          ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
+          SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
 
       - name: Persist Agent Engine ID to Secret Manager
         if: steps.deploy.outputs.agent_engine_id != ''
