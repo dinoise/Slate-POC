@@ -8,3 +8,4 @@ __pycache__/
 dist/
 *.egg-info/
 .adk/
+src/slate_agents/requirements.txt

@@ -88,6 +88,16 @@ jobs:
           ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
           SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
 
+      - name: Generate requirements.txt for Agent Engine
+        run: |
+          # Agent Engine needs a requirements.txt to build the deploymentSpec.
+          # uv export produces a pinned lockfile; strip editable installs (-e .)
+          # and comment lines so the file contains only package==version lines.
+          uv export --no-hashes --no-dev \
+            | grep -v "^-e " | grep -v "^\s*#" | grep -v "^$" \
+            > src/slate_agents/requirements.txt
+          echo "Generated $(wc -l < src/slate_agents/requirements.txt) packages"
+
       - name: Deploy to Vertex AI Agent Engine
         id: deploy
         run: |
@@ -107,6 +117,7 @@ jobs:
             --display_name="slate-agents-dev" \
             --adk_app_object=app \
             --env_file=/tmp/agents_runtime.env \
+            --requirements_file=src/slate_agents/requirements.txt \
             src/slate_agents/ 2>&1 | tee deploy_output.txt
 
           # Extract the Agent Engine ID from the output for the health check
