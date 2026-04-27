@@ -88,6 +88,22 @@ jobs:
           ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
           SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
 
+      - name: Resolve existing Agent Engine ID
+        id: resolve
+        shell: bash
+        run: |
+          # Read the existing Agent Engine ID from Secret Manager (if the secret exists).
+          # First deploy creates a new instance; subsequent deploys update the same one.
+          EXISTING_ID=$(gcloud secrets versions access latest \
+            --secret=poc-agents-engine-id-dev \
+            --project=${{ env.GOOGLE_CLOUD_PROJECT }} 2>/dev/null || echo "")
+          echo "existing_id=$EXISTING_ID" >> "$GITHUB_OUTPUT"
+          if [ -n "$EXISTING_ID" ]; then
+            echo "Updating existing Agent Engine: $EXISTING_ID"
+          else
+            echo "No existing Agent Engine found — will create a new one"
+          fi
+
       - name: Deploy to Vertex AI Agent Engine
         id: deploy
         shell: bash
@@ -111,6 +127,13 @@ jobs:
             > /tmp/agents_requirements.txt
           echo "Generated $(wc -l < /tmp/agents_requirements.txt) packages"
 
+          # Pass --agent_engine_id if an existing instance was found → update instead of create
+          EXISTING_ID="${{ steps.resolve.outputs.existing_id }}"
+          AGENT_ENGINE_ID_FLAG=""
+          if [ -n "$EXISTING_ID" ]; then
+            AGENT_ENGINE_ID_FLAG="--agent_engine_id=$EXISTING_ID"
+          fi
+
           uv run adk deploy agent_engine \
             --project=${{ env.GOOGLE_CLOUD_PROJECT }} \
             --region=${{ env.GOOGLE_CLOUD_LOCATION }} \
@@ -118,12 +141,34 @@ jobs:
             --adk_app_object=app \
             --env_file=/tmp/agents_runtime.env \
             --requirements_file=/tmp/agents_requirements.txt \
+            $AGENT_ENGINE_ID_FLAG \
             src/slate_agents/ 2>&1 | tee deploy_output.txt
 
-          # Extract the Agent Engine ID from the output for the health check
+          # Extract the Agent Engine ID from the output for subsequent steps
           AGENT_ENGINE_ID=$(grep -oP 'reasoningEngines/\K[0-9]+' deploy_output.txt | tail -1)
           echo "agent_engine_id=$AGENT_ENGINE_ID" >> "$GITHUB_OUTPUT"
           echo "Deployed Agent Engine ID: $AGENT_ENGINE_ID"
+
+      - name: Persist Agent Engine ID to Secret Manager
+        if: steps.deploy.outputs.agent_engine_id != ''
+        shell: bash
+        run: |
+          ID="${{ steps.deploy.outputs.agent_engine_id }}"
+          PROJECT="${{ env.GOOGLE_CLOUD_PROJECT }}"
+          SECRET="poc-agents-engine-id-dev"
+
+          # Create the secret if it doesn't exist yet, then add a new version.
+          # Use user-managed replication in us-central1 (org policy blocks global).
+          if ! gcloud secrets describe "$SECRET" --project="$PROJECT" &>/dev/null; then
+            gcloud secrets create "$SECRET" \
+              --project="$PROJECT" \
+              --replication-policy=user-managed \
+              --locations=us-central1
+          fi
+          echo -n "$ID" | gcloud secrets versions add "$SECRET" \
+            --project="$PROJECT" \
+            --data-file=-
+          echo "Saved Agent Engine ID $ID to secret $SECRET"
 
       - name: Health check
         if: steps.deploy.outputs.agent_engine_id != ''
