@@ -27,8 +27,16 @@ from .routes import (
 setup_logging()
 logger = get_logger(__name__)
 
-# Wire up Google auth dependency with this service's client IDs
-app_verify_google_token = make_verify_google_token(client_ids=settings.google_client_ids)
+# Wire up Google auth dependency.
+# client_ids      → OAuth tokens from frontend apps (admin, adjuster, reporter)
+# allowed_service_audiences → service-to-service tokens from Vertex AI Agent Engine
+#   tools calling slate-api via fetch_id_token(auth_req, "<slate-api-url>").
+#   In production: set GOOGLE_SERVICE_AUDIENCES=https://slate-api-dev-xxx.run.app
+#   In dev: leave empty — verification is skipped when GOOGLE_CLIENT_ID is also empty.
+app_verify_google_token = make_verify_google_token(
+    client_ids=settings.google_client_ids,
+    allowed_service_audiences=settings.google_service_audiences,
+)
 
 
 @asynccontextmanager

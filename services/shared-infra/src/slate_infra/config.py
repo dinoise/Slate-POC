@@ -51,6 +51,13 @@ class BaseAppSettings(BaseSettings):
     # If empty, token verification is skipped (dev / tests).
     GOOGLE_CLIENT_ID: str = ""
 
+    # Service-to-service audiences — comma-separated Cloud Run base URLs accepted
+    # as valid token audiences for internal callers (e.g. Vertex AI Agent Engine
+    # tools calling slate-api via fetch_id_token).
+    # Example: "https://slate-api-dev-abc.run.app"
+    # Leave empty in dev — verification is skipped when GOOGLE_CLIENT_ID is also empty.
+    GOOGLE_SERVICE_AUDIENCES: str = ""
+
     # Logging — empty string means "derive from ENVIRONMENT"
     LOG_LEVEL: str = ""
 
@@ -58,6 +65,16 @@ class BaseAppSettings(BaseSettings):
     def google_client_ids(self) -> list[str]:
         """List of allowed OAuth client IDs."""
         return [c.strip() for c in self.GOOGLE_CLIENT_ID.split(",") if c.strip()]
+
+    @property
+    def google_service_audiences(self) -> list[str]:
+        """List of allowed Cloud Run URL audiences for service-to-service tokens.
+
+        Used by Vertex AI Agent Engine tools calling slate-api via
+        ``google.oauth2.id_token.fetch_id_token(auth_req, audience)``.
+        The audience is the base URL of the Cloud Run service.
+        """
+        return [a.strip() for a in self.GOOGLE_SERVICE_AUDIENCES.split(",") if a.strip()]
 
     @property
     def cors_origins_list(self) -> list[str]:

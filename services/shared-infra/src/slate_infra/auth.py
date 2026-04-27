@@ -69,13 +69,25 @@ def _peek_audience(token: str) -> str | None:
 def make_verify_google_token(
     *,
     client_ids: list[str],
+    allowed_service_audiences: list[str] | None = None,
     accept_query_token: bool = False,
 ) -> Callable[..., Mapping[str, Any]]:
     """Factory that returns a FastAPI dependency for Google ID token verification.
 
+    Supports two token types:
+    - **User tokens** (OAuth2): ``aud`` is an OAuth client ID like
+      ``123456789-abc.apps.googleusercontent.com``. Used by frontend apps.
+    - **Service tokens** (service-to-service): ``aud`` is the target Cloud Run
+      URL like ``https://slate-api.run.app``. Used by Vertex AI Agent Engine
+      tools calling slate-api via ``google.oauth2.id_token.fetch_id_token()``.
+
     Args:
-        client_ids: Allowed OAuth client IDs. If empty, verification is skipped
-            (useful for local dev and tests when GOOGLE_CLIENT_ID is not set).
+        client_ids: Allowed OAuth client IDs for user tokens. If empty and
+            ``allowed_service_audiences`` is also empty, verification is
+            skipped (useful for local dev and tests).
+        allowed_service_audiences: Allowed Cloud Run URL audiences for
+            service-to-service tokens (Agent Engine → slate-api calls).
+            Defaults to ``None`` (no service tokens accepted).
         accept_query_token: If ``True``, also accepts the token from the
             ``?token=`` query parameter. Required for SSE/EventSource clients
             that cannot set custom headers. Defaults to ``False``.
@@ -83,11 +95,12 @@ def make_verify_google_token(
     Returns:
         A callable suitable for use with ``fastapi.Depends``.
     """
+    _allowed: frozenset[str] = frozenset(client_ids) | frozenset(allowed_service_audiences or [])
 
     def _check(token: str | None) -> Mapping[str, Any]:
         """Core verification logic shared by both variants."""
-        if not client_ids:
-            logger.warning("GOOGLE_CLIENT_ID not set — skipping token verification")
+        if not _allowed:
+            logger.warning("No auth config — skipping token verification")
             return {"sub": "dev", "email": "dev@local"}
 
         if not token:
@@ -97,10 +110,9 @@ def make_verify_google_token(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        client_ids_set = set(client_ids)
         audience = _peek_audience(token)
-        if audience not in client_ids_set:
-            logger.warning("Token audience '%s' not in allowed client IDs", audience)
+        if audience not in _allowed:
+            logger.warning("Token audience '%s' not in allowed set", audience)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired token",

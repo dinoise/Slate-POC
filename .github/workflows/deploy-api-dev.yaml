@@ -68,6 +68,7 @@ jobs:
         GOOGLE_CLIENT_ID=poc-api-dev-google-client-id:latest
         CORS_ORIGINS=poc-api-dev-cors-origins:latest
         GOOGLE_ROUTES_API_KEY=poc-api-dev-google-routes-key:latest
+        GOOGLE_SERVICE_AUDIENCES=poc-api-dev-service-audiences:latest
       cloudrun-env-vars: |
         TRAFFIC_PROVIDER=google
     secrets:
