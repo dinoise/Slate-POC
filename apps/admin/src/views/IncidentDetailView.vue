@@ -88,7 +88,7 @@ watch(sseEvent, (ev) => {
   }
 
   // Update map with new polyline if available
-  if (ev.route_polyline) drawPolyline(decodePolyline(ev.route_polyline))
+  if (ev.route?.polyline) drawPolyline(decodePolyline(ev.route.polyline))
 
   // Clear route on terminal
   if (ev.status === AssignmentStatus.CANCELLED || ev.status === AssignmentStatus.COMPLETED) {
