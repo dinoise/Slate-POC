@@ -148,9 +148,15 @@ def update_agent(resource_id: str) -> str:
 
 
 def health_check(resource_id: str) -> bool:
-    """Verify that the deployed Agent Engine is in ACTIVE state."""
+    """Verify that the deployed Agent Engine is reachable via the high-level SDK.
+
+    The v1beta1 ReasoningEngine proto has no `state` field — lifecycle state is
+    not exposed in that API. Instead we use vertexai.agent_engines.get() which
+    resolves the LRO and raises if the engine is not yet active or does not exist.
+    """
     try:
         import vertexai  # type: ignore[import-untyped]
+        from vertexai import agent_engines  # type: ignore[import-untyped]
 
         project = os.environ["GOOGLE_CLOUD_PROJECT"]
         location = os.environ["GOOGLE_CLOUD_LOCATION"]
@@ -158,32 +164,20 @@ def health_check(resource_id: str) -> bool:
             project=project, location=location, staging_bucket=os.environ["STAGING_BUCKET"]
         )
 
-        from google.api_core.client_options import ClientOptions  # type: ignore[import-untyped]
-        from google.cloud.aiplatform_v1beta1 import (  # type: ignore[import-untyped]
-            ReasoningEngineServiceClient,
-        )
-
-        client = ReasoningEngineServiceClient(
-            client_options=ClientOptions(api_endpoint=f"{location}-aiplatform.googleapis.com")
-        )
-        name = (
+        resource_name = (
             f"projects/{project}/locations/{location}/reasoningEngines/{resource_id}"
             if not resource_id.startswith("projects/")
             else resource_id
         )
-        engine = client.get_reasoning_engine(name=name)
-        state = engine.state.name if hasattr(engine, "state") else "UNKNOWN"
-        logger.info("Agent Engine state: %s", state)
 
-        if state == "ACTIVE":
-            logger.info("Health check PASSED.")
-            return True
-
-        logger.error("Health check FAILED — unexpected state: %s", state)
-        return False
+        engine = agent_engines.get(resource_name)
+        display_name = engine.display_name
+        logger.info("Agent Engine reachable: %s (%s)", resource_name, display_name)
+        logger.info("Health check PASSED.")
+        return True
 
     except Exception as e:
-        logger.error("Health check error: %s", e)
+        logger.error("Health check FAILED — %s", e)
         return False
 
 
