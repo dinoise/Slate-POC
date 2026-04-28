@@ -216,17 +216,31 @@ export interface AssignmentEvent {
 // ── Observatory ───────────────────────────────────────────────────────────────
 
 /** Names of toggleable map layers in the observatory dashboard. */
-export type LayerName = 'demand' | 'assignments' | 'routes'
+export type LayerName = 'demand' | 'assignments' | 'routes' | 'free_adjusters' | 'recommendations'
+
+/** An available (unassigned) adjuster shown on the observatory map. */
+export interface FreeAdjuster {
+  id: number
+  first_name: string
+  last_name: string
+  /** current_latitude ?? home_latitude — resolved before passing to the map. */
+  latitude: number
+  longitude: number
+}
 
 /** Feature selected by clicking on the observatory map. */
 export interface ObservatoryClickedFeature {
-  type: 'assignment' | 'hexagon'
+  type: 'assignment' | 'hexagon' | 'recommendation' | 'free_adjuster'
   /** Populated when clicking a siniestro/adjuster marker. */
   assignmentEvent?: AssignmentEvent
   /** Populated when clicking an H3 hexagon. */
   h3Index?: string
   demandLevel?: number
   predAbs?: number
+  /** Populated when clicking a recommendation destination marker. */
+  recommendation?: RecommendationItem
+  /** Populated when clicking a free (available) adjuster marker. */
+  freeAdjuster?: FreeAdjuster
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────

@@ -58,6 +58,55 @@ async def get_adjusters(
 
 
 @router.get(
+    "/available",
+    response_model=list[AdjusterRead],
+    summary="Get available adjusters",
+)
+async def get_available_adjusters(
+    service: AdjusterServiceDep,
+    latitude: float | None = Query(None, ge=-90, le=90),
+    longitude: float | None = Query(None, ge=-180, le=180),
+    radius_km: float = Query(50.0, gt=0, le=200),
+    limit: int = Query(100, ge=1, le=1000),
+    scenario: str = Query(
+        "initial", description="Positioning scenario to use for current location."
+    ),
+) -> list[AdjusterRead]:
+    """Get available adjusters with their current working position.
+
+    Distance filter and returned coordinates use ``adjuster_positions``
+    for the given scenario.  Falls back to ``home_location`` when no
+    position row exists.
+
+    Must be declared before /{adjuster_id} so FastAPI does not try to
+    parse "available" as an integer path parameter.
+    """
+    return await service.get_available_adjusters(
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        limit=limit,
+        scenario=scenario,
+    )
+
+
+@router.post(
+    "/reset-status",
+    status_code=status.HTTP_200_OK,
+    summary="Reset all adjusters to available",
+)
+async def reset_adjusters_status(
+    service: AdjusterServiceDep,
+) -> dict:
+    """Set all busy/en_route/on_site active adjusters back to available.
+
+    Used by the demo reset flow (load initial state).
+    """
+    reset = await service.reset_all_to_available()
+    return {"reset": reset}
+
+
+@router.get(
     "/{adjuster_id}",
     response_model=AdjusterRead,
     summary="Get adjuster by ID",
@@ -86,22 +135,6 @@ async def update_adjuster(
     return AdjusterRead.model_validate(adjuster)
 
 
-@router.post(
-    "/reset-status",
-    status_code=status.HTTP_200_OK,
-    summary="Reset all adjusters to available",
-)
-async def reset_adjusters_status(
-    service: AdjusterServiceDep,
-) -> dict:
-    """Set all busy/en_route/on_site active adjusters back to available.
-
-    Used by the demo reset flow (load initial state).
-    """
-    reset = await service.reset_all_to_available()
-    return {"reset": reset}
-
-
 @router.delete(
     "/{adjuster_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -113,33 +146,3 @@ async def delete_adjuster(
 ) -> None:
     """Soft-delete an adjuster (sets is_active=False, status=offline)."""
     await service.soft_delete_adjuster(adjuster_id)
-
-
-@router.get(
-    "/available/",
-    response_model=list[AdjusterRead],
-    summary="Get available adjusters",
-)
-async def get_available_adjusters(
-    service: AdjusterServiceDep,
-    latitude: float | None = Query(None, ge=-90, le=90),
-    longitude: float | None = Query(None, ge=-180, le=180),
-    radius_km: float = Query(50.0, gt=0, le=200),
-    limit: int = Query(100, ge=1, le=1000),
-    scenario: str = Query(
-        "initial", description="Positioning scenario to use for current location."
-    ),
-) -> list[AdjusterRead]:
-    """Get available adjusters with their current working position.
-
-    Distance filter and returned coordinates use ``adjuster_positions``
-    for the given scenario.  Falls back to ``home_location`` when no
-    position row exists.
-    """
-    return await service.get_available_adjusters(
-        latitude=latitude,
-        longitude=longitude,
-        radius_km=radius_km,
-        limit=limit,
-        scenario=scenario,
-    )

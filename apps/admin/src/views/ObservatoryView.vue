@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
@@ -9,16 +9,28 @@ import ProgressSpinner from 'primevue/progressspinner'
 import Badge from 'primevue/badge'
 
 import { useObservatorySSE, useObservatoryMap, getMXCurrentSlot } from '@slate/composables'
-import { demandApi, recommendationsApi } from '@slate/api-client'
-import type { DemandPrediction, RecommendationResponse } from '@slate/types'
+import { adjustersApi, demandApi, recommendationsApi } from '@slate/api-client'
+import type { DemandPrediction, FreeAdjuster, RecommendationResponse } from '@slate/types'
 
 // ── SSE ───────────────────────────────────────────────────────────────────────
 const { activeAssignments, assignments, connected, lastEventAt, error: sseError } = useObservatorySSE()
 
 // ── Map ───────────────────────────────────────────────────────────────────────
 const mapContainer = ref<HTMLElement | null>(null)
-const { clickedFeature, hoveredTooltip, layerVisibility, setDemandLayer, setAssignmentsLayer, toggleLayer, onViewportChange, destroy } =
-  useObservatoryMap(mapContainer)
+const {
+  clickedFeature,
+  hoveredTooltip,
+  layerVisibility,
+  ensureInit,
+  setDemandLayer,
+  setAssignmentsLayer,
+  setFreeAdjustersLayer,
+  setRecommendationsLayer,
+  clearRecommendationsLayer,
+  toggleLayer,
+  onViewportChange,
+  destroy,
+} = useObservatoryMap(mapContainer)
 
 // Last known viewport bbox — updated by map moveend/zoomend via onViewportChange.
 // Fallback is CDMX until the map has loaded and emitted its first viewport event.
@@ -51,10 +63,30 @@ const loadingDemand = ref(false)
 // bbox is already snapped to 1 decimal by the composable before emission.
 const demandCache = new Map<string, DemandPrediction[]>()
 
+/** Ensure the bbox has at least 0.1° spread so the API never receives a
+ *  collapsed box (minLat==maxLat) when zoomed in too far. */
+function _expandBbox(bbox: string): string {
+  const [minLat, minLon, maxLat, maxLon] = bbox.split(',').map(Number)
+  const MIN_SPREAD = 0.1
+  const latSpread = maxLat - minLat
+  const lonSpread = maxLon - minLon
+  if (latSpread >= MIN_SPREAD && lonSpread >= MIN_SPREAD) return bbox
+  const latMid = (minLat + maxLat) / 2
+  const lonMid = (minLon + maxLon) / 2
+  const half = MIN_SPREAD / 2
+  return [
+    (latMid - half).toFixed(1),
+    (lonMid - half).toFixed(1),
+    (latMid + half).toFixed(1),
+    (lonMid + half).toFixed(1),
+  ].join(',')
+}
+
 async function fetchDemand(bbox: string) {
   if (!layerVisibility.value.demand) return
 
-  const key = `${selectedHour.value}_${selectedDay.value}_${bbox}`
+  const safeBbox = _expandBbox(bbox)
+  const key = `${selectedHour.value}_${selectedDay.value}_${safeBbox}`
   if (demandCache.has(key)) {
     const cached = demandCache.get(key)!
     demandPredictions.value = cached
@@ -66,7 +98,7 @@ async function fetchDemand(bbox: string) {
     const res = await demandApi.bySlot({
       dia_semana_num: selectedDay.value,
       hora_num:       selectedHour.value,
-      bbox,
+      bbox:           safeBbox,
     })
     const data = Array.isArray(res) ? res : []
     demandCache.set(key, data)
@@ -91,13 +123,51 @@ onViewportChange((bbox) => {
 })
 
 // ── Layer toggles → map ───────────────────────────────────────────────────────
-function handleToggle(name: 'demand' | 'assignments' | 'routes') {
+function handleToggle(name: 'demand' | 'assignments' | 'routes' | 'free_adjusters' | 'recommendations') {
   const newVisible = !layerVisibility.value[name]
   toggleLayer(name, newVisible)
   // When demand layer is re-enabled, fetch the current viewport in case it
   // changed while the layer was off (data may be stale or missing).
   if (name === 'demand' && newVisible) fetchDemand(currentBbox.value)
 }
+
+// ── Free adjusters ────────────────────────────────────────────────────────────
+const freeAdjusters = ref<FreeAdjuster[]>([])
+
+async function loadFreeAdjusters() {
+  try {
+    const res = await adjustersApi.available()
+    console.log('[observatory] available adjusters raw:', res)
+    // available() returns Adjuster[] — use current_lat/lon if known, else home
+    // Filter out any with missing coordinates to avoid Deck.gl null errors
+    freeAdjusters.value = res
+      .filter((a) => {
+        const lat = a.current_latitude  ?? a.home_latitude
+        const lon = a.current_longitude ?? a.home_longitude
+        if (lat == null || lon == null) {
+          console.warn('[observatory] adjuster missing coords, skipping:', a.id)
+          return false
+        }
+        return true
+      })
+      .map((a) => ({
+        id:         a.id,
+        first_name: a.first_name,
+        last_name:  a.last_name,
+        latitude:   a.current_latitude  ?? a.home_latitude,
+        longitude:  a.current_longitude ?? a.home_longitude,
+      }))
+    console.log('[observatory] free adjusters mapped:', freeAdjusters.value)
+    // Pass a plain array — Deck.gl doesn't understand Vue reactive proxies
+    await setFreeAdjustersLayer([...freeAdjusters.value])
+  } catch (e) {
+    console.error('[observatory] loadFreeAdjusters error:', e)
+  }
+}
+
+// Refresh free adjusters when an SSE event arrives — an assignment completion
+// returns the adjuster to "available" so we need to reload to show them again.
+watch(activeAssignments, () => { loadFreeAdjusters() }, { deep: false })
 
 // ── Positioning ───────────────────────────────────────────────────────────────
 const radioKm      = ref(7.5)
@@ -110,6 +180,8 @@ async function runOptimize() {
   loadingOptimize.value = true
   optimizeError.value   = null
   optimizeResult.value  = null
+  clearRecommendationsLayer()
+
   try {
     optimizeResult.value = await recommendationsApi.generate({
       hora_num:       selectedHour.value,
@@ -117,6 +189,10 @@ async function runOptimize() {
       radio_km:       radioKm.value,
       spread_factor:  spreadFactor.value,
     })
+
+    // Build adjuster_id → current position map from loaded free adjusters
+    const posMap = new Map(freeAdjusters.value.map((a) => [a.id, { lat: a.latitude, lon: a.longitude }]))
+    await setRecommendationsLayer(optimizeResult.value.recommendations, posMap)
   } catch (e) {
     optimizeError.value = e instanceof Error ? e.message : 'Error al optimizar'
   } finally {
@@ -133,9 +209,15 @@ watch(activeAssignments, async (events) => {
 const now = ref(Date.now())
 let freshnessTimer: ReturnType<typeof setInterval> | null = null
 
-onMounted(() => {
+onMounted(async () => {
   freshnessTimer = setInterval(() => { now.value = Date.now() }, 10_000)
-  fetchDemand(currentBbox.value)
+  // nextTick ensures mapContainer ref is populated before any map work.
+  // ensureInit creates MapLibre + Deck.gl overlay; all subsequent set*Layer
+  // calls are guaranteed to find an initialised map instance.
+  await nextTick()
+  await ensureInit()
+  // Run demand fetch and free adjuster load in parallel — map is ready for both.
+  await Promise.all([fetchDemand(currentBbox.value), loadFreeAdjusters()])
 })
 onUnmounted(() => {
   if (freshnessTimer) clearInterval(freshnessTimer)
@@ -172,6 +254,8 @@ const kpiOpenIncidents = computed(() => {
 })
 
 const kpiTotalKnown = computed(() => assignments.value.size)
+
+const kpiFreeAdjusters = computed(() => freeAdjusters.value.length)
 
 // ── Side drawer ───────────────────────────────────────────────────────────────
 const drawerVisible = computed(() => clickedFeature.value !== null)
@@ -223,6 +307,14 @@ const STATUS_LABEL: Record<string, string> = {
           </div>
         </template>
       </Card>
+      <Card class="kpi-card">
+        <template #content>
+          <div class="kpi-inner">
+            <span class="kpi-value kpi-value--free">{{ kpiFreeAdjusters }}</span>
+            <span class="kpi-label">Disponibles</span>
+          </div>
+        </template>
+      </Card>
       <Card class="kpi-card kpi-card--sse">
         <template #content>
           <div class="kpi-inner">
@@ -268,6 +360,24 @@ const STATUS_LABEL: Record<string, string> = {
               />
               <span class="toggle-swatch toggle-swatch--routes" />
               Rutas
+            </label>
+            <label class="toggle-row">
+              <input
+                type="checkbox"
+                :checked="layerVisibility.free_adjusters"
+                @change="handleToggle('free_adjusters')"
+              />
+              <span class="toggle-swatch toggle-swatch--free" />
+              Disponibles
+            </label>
+            <label class="toggle-row">
+              <input
+                type="checkbox"
+                :checked="layerVisibility.recommendations"
+                @change="handleToggle('recommendations')"
+              />
+              <span class="toggle-swatch toggle-swatch--recommendations" />
+              Posicionamiento
             </label>
           </div>
         </section>
@@ -482,6 +592,58 @@ const STATUS_LABEL: Record<string, string> = {
             <span class="drawer-value muted">{{ clickedFeature.assignmentEvent.route.provider }}</span>
           </div>
         </div>
+
+        <!-- Recommendation destination feature -->
+        <div v-else-if="clickedFeature.type === 'recommendation' && clickedFeature.recommendation" class="drawer-content">
+          <div class="drawer-section-header">Recomendación de posicionamiento</div>
+          <div class="drawer-row">
+            <span class="drawer-label">Ajustador</span>
+            <span class="drawer-value">{{ clickedFeature.recommendation.adjuster_name }}</span>
+          </div>
+          <div class="drawer-row">
+            <span class="drawer-label">Hex destino</span>
+            <code class="drawer-value drawer-value--mono">{{ clickedFeature.recommendation.recommended_hex }}</code>
+          </div>
+          <div class="drawer-row">
+            <span class="drawer-label">Ganancia de demanda</span>
+            <span class="drawer-value drawer-value--gain">+{{ clickedFeature.recommendation.demand_gain.toFixed(2) }}</span>
+          </div>
+          <div class="drawer-row">
+            <span class="drawer-label">Distancia a mover</span>
+            <span class="drawer-value">{{ clickedFeature.recommendation.distance_km.toFixed(1) }} km</span>
+          </div>
+          <div class="drawer-row">
+            <span class="drawer-label">Tiempo estimado</span>
+            <span class="drawer-value">{{ clickedFeature.recommendation.eta_min.toFixed(0) }} min</span>
+          </div>
+          <div class="drawer-row">
+            <span class="drawer-label">Razón</span>
+            <span class="drawer-value drawer-value--wrap muted">{{ clickedFeature.recommendation.reason }}</span>
+          </div>
+        </div>
+
+        <!-- Free adjuster feature -->
+        <div v-else-if="clickedFeature.type === 'free_adjuster' && clickedFeature.freeAdjuster" class="drawer-content">
+          <div class="drawer-section-header">Ajustador disponible</div>
+          <div class="drawer-row">
+            <span class="drawer-label">Nombre</span>
+            <span class="drawer-value">{{ clickedFeature.freeAdjuster.first_name }} {{ clickedFeature.freeAdjuster.last_name }}</span>
+          </div>
+          <div class="drawer-row">
+            <span class="drawer-label">ID</span>
+            <span class="drawer-value">#{{ clickedFeature.freeAdjuster.id }}</span>
+          </div>
+          <div class="drawer-row">
+            <span class="drawer-label">Posición</span>
+            <span class="drawer-value muted">
+              {{ clickedFeature.freeAdjuster.latitude.toFixed(4) }},
+              {{ clickedFeature.freeAdjuster.longitude.toFixed(4) }}
+            </span>
+          </div>
+          <div class="drawer-row">
+            <Badge value="Disponible" severity="success" />
+          </div>
+        </div>
       </template>
     </Drawer>
   </div>
@@ -615,9 +777,11 @@ const STATUS_LABEL: Record<string, string> = {
   flex-shrink: 0;
 }
 
-.toggle-swatch--demand   { background: #3b82f6; }
-.toggle-swatch--incidents { background: #ef4444; }
-.toggle-swatch--routes   { background: #6366f1; }
+.toggle-swatch--demand          { background: #3b82f6; }
+.toggle-swatch--incidents       { background: #ef4444; }
+.toggle-swatch--routes          { background: #6366f1; }
+.toggle-swatch--free            { background: #9ca3af; }
+.toggle-swatch--recommendations { background: #f59e0b; }
 
 /* Slot selector */
 .slot-controls {
@@ -902,5 +1066,33 @@ const STATUS_LABEL: Record<string, string> = {
 
 .muted {
   color: var(--p-surface-500);
+}
+
+.kpi-value--free {
+  color: #9ca3af;
+}
+
+.drawer-section-header {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--p-surface-400);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--p-surface-700);
+  margin-bottom: 0.25rem;
+}
+
+.drawer-value--gain {
+  color: #22c55e;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.drawer-value--mono {
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: var(--p-surface-200);
+  word-break: break-all;
 }
 </style>

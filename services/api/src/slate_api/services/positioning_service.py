@@ -136,10 +136,53 @@ class PositioningService:
         self._pos_repo = AdjusterPositionRepository(db)
         self._demand_repo = DemandPredictionRepository(db)
 
+    async def _seed_initial_scenario(self) -> list[AdjusterPosition]:
+        """Populate scenario='initial' from home_lat/lon of all available adjusters.
+
+        Called automatically by recommend() when 'initial' has no rows so that
+        the optimizer never fails on first use. Only seeds adjusters whose
+        status is 'available' and is_active is True — busy/offline adjusters
+        are intentionally excluded because the optimizer only moves available ones.
+        """
+        from ..repositories.adjuster_repository import AdjusterRepository
+
+        adj_repo = AdjusterRepository(self._db)
+        # get_available() without lat/lon returns all available adjusters
+        rows = await adj_repo.get_available(limit=500)
+        if not rows:
+            return []
+
+        new_positions: list[AdjusterPosition] = []
+        for adjuster, _cur_lat, _cur_lon in rows:
+            lat = adjuster.home_latitude
+            lon = adjuster.home_longitude
+            h3_r8 = h3.latlng_to_cell(lat, lon, 8)
+            wkt = f"POINT({lon} {lat})"
+            new_positions.append(
+                AdjusterPosition(
+                    adjuster_id=adjuster.id,
+                    lat=lat,
+                    lon=lon,
+                    location=ST_GeomFromText(wkt, 4326),
+                    h3_r8=h3_r8,
+                    scenario="initial",
+                    source="home_location",
+                    demand_score=None,
+                    cluster_id=None,
+                    hora_num=None,
+                    dia_semana_num=None,
+                )
+            )
+        await self._pos_repo.bulk_insert(new_positions)
+        return new_positions
+
     async def recommend(self, req: RecommendationRequest) -> RecommendationResponse:
         positions = await self._pos_repo.get_by_scenario(req.scenario)
         if not positions:
-            raise ValueError(f"Scenario '{req.scenario}' has no positions")
+            if req.scenario == "initial":
+                positions = await self._seed_initial_scenario()
+            if not positions:
+                raise ValueError(f"Scenario '{req.scenario}' has no positions")
 
         adj_df = pd.DataFrame(
             [

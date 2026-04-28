@@ -18,7 +18,14 @@
  */
 
 import { ref, onUnmounted, type Ref } from 'vue'
-import type { AssignmentEvent, DemandPrediction, LayerName, ObservatoryClickedFeature } from '@slate/types'
+import type {
+  AssignmentEvent,
+  DemandPrediction,
+  FreeAdjuster,
+  LayerName,
+  ObservatoryClickedFeature,
+  RecommendationItem,
+} from '@slate/types'
 import { decodePolyline } from './useRoute'
 
 // ── Demand colour scale (demand_level 0=low 1=med 2=high) ─────────────────────
@@ -32,6 +39,14 @@ const FALLBACK_COLOUR: [number, number, number, number] = [156, 163, 175, 100]
 // Route colours
 const ROUTE_BASE_COLOR:  [number, number, number, number] = [99,  102, 241, 140]  // indigo, dimmed
 const ROUTE_HOVER_COLOR: [number, number, number, number] = [245, 158,  11, 255]  // amber-500, full opacity
+
+// Free adjuster colour (available, no active assignment)
+const FREE_ADJ_COLOR: [number, number, number, number] = [156, 163, 175, 200]   // gray-400
+
+// Recommendation colours
+const REC_ORIGIN_COLOR:      [number, number, number, number] = [245, 158,  11, 220]  // amber-500 — current pos
+const REC_DESTINATION_COLOR: [number, number, number, number] = [ 34, 197,  94, 255]  // green-500 — target pos
+const REC_ARROW_COLOR:       [number, number, number, number] = [245, 158,  11, 140]  // amber, semi-transparent
 
 // CDMX default view
 const INITIAL_VIEW = { longitude: -99.13, latitude: 19.43, zoom: 10 }
@@ -49,12 +64,22 @@ export interface UseObservatoryMapReturn {
   layerVisibility: Ref<Record<LayerName, boolean>>
   /** Currently hovered assignment tooltip — null when no marker is hovered. */
   hoveredTooltip:  Ref<MapTooltip | null>
-  setDemandLayer:      (predictions: DemandPrediction[]) => Promise<void>
-  setAssignmentsLayer: (events: AssignmentEvent[])       => Promise<void>
-  toggleLayer:         (name: LayerName, visible: boolean) => void
+  /** Initialise the map without setting data. Call from onMounted after nextTick. */
+  ensureInit:               () => Promise<void>
+  setDemandLayer:           (predictions: DemandPrediction[]) => Promise<void>
+  setAssignmentsLayer:      (events: AssignmentEvent[])       => Promise<void>
+  setFreeAdjustersLayer:    (adjusters: FreeAdjuster[])       => Promise<void>
+  /** Render origin→destination arrows for optimizer recommendations.
+   *  adjusterPositions maps adjuster_id → {lat, lon} of current position. */
+  setRecommendationsLayer:  (
+    recs: RecommendationItem[],
+    adjusterPositions: Map<number, { lat: number; lon: number }>,
+  ) => Promise<void>
+  clearRecommendationsLayer: () => void
+  toggleLayer:              (name: LayerName, visible: boolean) => void
   /** Register a callback fired on moveend/zoomend with the snapped bbox string. */
-  onViewportChange:    (cb: (bbox: string) => void) => void
-  destroy:             () => void
+  onViewportChange:         (cb: (bbox: string) => void) => void
+  destroy:                  () => void
 }
 
 export function useObservatoryMap(
@@ -63,14 +88,24 @@ export function useObservatoryMap(
   const clickedFeature  = ref<ObservatoryClickedFeature | null>(null)
   const hoveredTooltip  = ref<MapTooltip | null>(null)
   const layerVisibility = ref<Record<LayerName, boolean>>({
-    demand:      true,
-    assignments: true,
-    routes:      true,
+    demand:          true,
+    assignments:     true,
+    routes:          true,
+    free_adjusters:  true,
+    recommendations: true,
   })
 
   // Data stores updated by public setters
   let demandData:     DemandPrediction[] = []
   let assignmentData: AssignmentEvent[]  = []
+  let freeAdjData:    FreeAdjuster[]     = []
+
+  // Recommendation layers need both the rec item and the adjuster's current position
+  interface RecWithOrigin extends RecommendationItem {
+    origin_lat: number
+    origin_lon: number
+  }
+  let recommendationData: RecWithOrigin[] = []
 
   // Currently hovered assignment_id — drives paired highlighting across layers.
   // Stored as a plain variable (not ref) because it's mutated inside Deck.gl
@@ -138,7 +173,14 @@ export function useObservatoryMap(
   // ── Lazy init ──────────────────────────────────────────────────────────────
 
   function _init(): Promise<void> {
-    if (initPromise) return initPromise
+    // If already initialised (or in progress), return the existing promise.
+    // But if the container wasn't available last time, initPromise was set to
+    // a resolved-empty promise — reset it so we retry on the next call.
+    if (initPromise) {
+      if (mapInstance) return initPromise   // fully initialised
+      if (!containerRef.value) return initPromise  // still no container — keep waiting
+      initPromise = null  // container now available but map not created — retry
+    }
     initPromise = (async () => {
       if (!containerRef.value) return
 
@@ -391,6 +433,111 @@ export function useObservatoryMap(
     return [baseLayer, hoverLayer, hitLayer]
   }
 
+  // ── Free adjusters layer ──────────────────────────────────────────────────
+
+  function _freeAdjustersLayer() {
+    if (!layerVisibility.value.free_adjusters || !ScatterplotLayer) return null
+    if (!freeAdjData.length) return null
+
+    return new ScatterplotLayer({
+      id:   'free-adjusters',
+      data: freeAdjData,
+      getPosition: (a: FreeAdjuster) => [a.longitude, a.latitude],
+      getRadius:        6,
+      radiusUnits:      'pixels',
+      radiusMinPixels:  4,
+      radiusMaxPixels:  14,
+      getFillColor:     FREE_ADJ_COLOR,
+      getLineColor:     [255, 255, 255, 160] as [number, number, number, number],
+      getLineWidth:     1.5,
+      stroked:          true,
+      lineWidthUnits:   'pixels',
+      pickable:         true,
+      onHover: ({ object, x, y }: { object: FreeAdjuster | null; x: number; y: number }) => {
+        if (mapInstance) {
+          mapInstance.getCanvas().style.cursor = object ? 'pointer' : ''
+        }
+        // Free adjuster hover doesn't interact with assignment highlighting
+      },
+      onClick: ({ object }: { object: FreeAdjuster | null }) => {
+        if (!object) return
+        clickedFeature.value = { type: 'free_adjuster', freeAdjuster: object }
+      },
+    })
+  }
+
+  // ── Recommendations layers (origin dot + destination dot + arrow) ─────────
+
+  /**
+   * Three-layer recommendation visualization (bottom → top):
+   *   rec-arrows       : dashed PathLayer ámbar, origin → destination
+   *   rec-origin       : ScatterplotLayer ámbar — current adjuster position
+   *   rec-destination  : ScatterplotLayer green — recommended hex centroid
+   *
+   * Destination dots are larger and fully opaque so they read as "where to go".
+   * Origin dots are smaller and semi-transparent so they read as "where now".
+   * Dashed arrows connect them without adding visual clutter.
+   */
+  function _recommendationsLayers(): (unknown | null)[] {
+    if (!layerVisibility.value.recommendations || !ScatterplotLayer || !PathLayer) return [null]
+    if (!recommendationData.length) return [null]
+
+    const arrowLayer = new PathLayer({
+      id:   'rec-arrows',
+      data: recommendationData,
+      getPath:    (r: RecWithOrigin) => [[r.origin_lon, r.origin_lat], [r.recommended_lon, r.recommended_lat]],
+      getColor:   REC_ARROW_COLOR,
+      getWidth:   2,
+      widthUnits: 'pixels',
+      getDashArray: [5, 4],
+      dashJustified: true,
+      pickable:   false,
+    })
+
+    const originLayer = new ScatterplotLayer({
+      id:   'rec-origin',
+      data: recommendationData,
+      getPosition:  (r: RecWithOrigin) => [r.origin_lon, r.origin_lat],
+      getRadius:        7,
+      radiusUnits:      'pixels',
+      radiusMinPixels:  4,
+      radiusMaxPixels:  16,
+      getFillColor:     REC_ORIGIN_COLOR,
+      getLineColor:     [255, 255, 255, 200] as [number, number, number, number],
+      getLineWidth:     1.5,
+      stroked:          true,
+      lineWidthUnits:   'pixels',
+      pickable:         false,
+    })
+
+    const destLayer = new ScatterplotLayer({
+      id:   'rec-destination',
+      data: recommendationData,
+      getPosition:  (r: RecWithOrigin) => [r.recommended_lon, r.recommended_lat],
+      getRadius:        10,
+      radiusUnits:      'pixels',
+      radiusMinPixels:  6,
+      radiusMaxPixels:  22,
+      getFillColor:     REC_DESTINATION_COLOR,
+      getLineColor:     [255, 255, 255, 255] as [number, number, number, number],
+      getLineWidth:     2,
+      stroked:          true,
+      lineWidthUnits:   'pixels',
+      pickable:         true,
+      onClick: ({ object }: { object: RecWithOrigin | null }) => {
+        if (!object) return
+        clickedFeature.value = { type: 'recommendation', recommendation: object }
+      },
+      onHover: ({ object }: { object: RecWithOrigin | null }) => {
+        if (mapInstance) {
+          mapInstance.getCanvas().style.cursor = object ? 'pointer' : ''
+        }
+      },
+    })
+
+    return [arrowLayer, originLayer, destLayer]
+  }
+
   // ── Re-render ─────────────────────────────────────────────────────────────
 
   function _render() {
@@ -398,24 +545,61 @@ export function useObservatoryMap(
     deckOverlay.setProps({
       layers: [
         _demandLayer(),
-        ..._routesLayers(),   // routes drawn below markers so markers are always on top
+        ..._routesLayers(),           // routes below markers
+        ..._recommendationsLayers(),  // recommendations above demand, below live markers
+        _freeAdjustersLayer(),        // available adjusters (gray)
         _incidentLayer(),
-        _adjusterLayer(),
+        _adjusterLayer(),             // assigned adjusters always on top
       ].filter(Boolean),
     })
   }
 
   // ── Public API ────────────────────────────────────────────────────────────
 
+  /** Explicitly initialise the map without setting any data.
+   *  Call this from onMounted (after nextTick) so the map exists before
+   *  any parallel data loaders call their set*Layer methods. */
+  async function ensureInit() {
+    await _init()
+  }
+
   async function setDemandLayer(predictions: DemandPrediction[]) {
     await _init()
-    demandData = predictions
+    demandData = [...predictions]   // unwrap Vue proxy → plain array for Deck.gl
     _render()
   }
 
   async function setAssignmentsLayer(events: AssignmentEvent[]) {
     await _init()
-    assignmentData = events
+    assignmentData = [...events]
+    _render()
+  }
+
+  async function setFreeAdjustersLayer(adjusters: FreeAdjuster[]) {
+    await _init()
+    freeAdjData = [...adjusters]
+    _render()
+  }
+
+  async function setRecommendationsLayer(
+    recs: RecommendationItem[],
+    adjusterPositions: Map<number, { lat: number; lon: number }>,
+  ) {
+    await _init()
+    recommendationData = recs.map((r) => {
+      const origin = adjusterPositions.get(r.adjuster_id)
+      return {
+        ...r,
+        // Fall back to destination if adjuster position unknown (shouldn't happen)
+        origin_lat: origin?.lat ?? r.recommended_lat,
+        origin_lon: origin?.lon ?? r.recommended_lon,
+      }
+    })
+    _render()
+  }
+
+  function clearRecommendationsLayer() {
+    recommendationData = []
     _render()
   }
 
@@ -443,8 +627,12 @@ export function useObservatoryMap(
     clickedFeature,
     hoveredTooltip,
     layerVisibility,
+    ensureInit,
     setDemandLayer,
     setAssignmentsLayer,
+    setFreeAdjustersLayer,
+    setRecommendationsLayer,
+    clearRecommendationsLayer,
     toggleLayer,
     onViewportChange,
     destroy,
