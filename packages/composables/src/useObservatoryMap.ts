@@ -51,13 +51,11 @@ const REC_ARROW_COLOR:       [number, number, number, number] = [245, 158,  11, 
 // CDMX default view
 const INITIAL_VIEW = { longitude: -99.13, latitude: 19.43, zoom: 10 }
 
-/** Tooltip data exposed to the parent component for overlay rendering. */
-export interface MapTooltip {
-  /** Canvas x/y pixel coordinates from Deck.gl pickingInfo. */
-  x: number
-  y: number
-  event: AssignmentEvent
-}
+/** Tooltip data exposed to the parent component for overlay rendering.
+ *  Discriminated union so the view renders the correct content per marker type. */
+export type MapTooltip =
+  | { type: 'assignment';   x: number; y: number; event: AssignmentEvent }
+  | { type: 'free_adjuster'; x: number; y: number; adjuster: FreeAdjuster }
 
 export interface UseObservatoryMapReturn {
   clickedFeature:  Ref<ObservatoryClickedFeature | null>
@@ -112,6 +110,9 @@ export function useObservatoryMap(
   // callbacks and we always follow it with an explicit _render() call.
   let hoveredAssignmentId: number | null = null
 
+  // Currently hovered free adjuster id — drives highlight on the free-adjusters layer.
+  let hoveredFreeAdjId: number | null = null
+
   // Deck.gl / MapLibre instances — created once on first setter call
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let deckOverlay: any = null
@@ -161,7 +162,7 @@ export function useObservatoryMap(
     if (newId === hoveredAssignmentId) return   // no change — skip re-render
 
     hoveredAssignmentId = newId
-    hoveredTooltip.value = object ? { x, y, event: object } : null
+    hoveredTooltip.value = object ? { type: 'assignment', x, y, event: object } : null
     _render()
   }
 
@@ -265,35 +266,39 @@ export function useObservatoryMap(
   function _incidentLayer() {
     if (!layerVisibility.value.assignments || !ScatterplotLayer) return null
 
-    const hid = hoveredAssignmentId
+    const hid    = hoveredAssignmentId
+    // Dim assignments entirely when a free adjuster is being hovered
+    const dimAll = hoveredFreeAdjId !== null
 
     return new ScatterplotLayer({
       id:   'incidents',
       data: assignmentData,
-      // Key on hovered id so Deck.gl recomputes per-object accessors when it changes
-      updateTriggers: { getFillColor: hid, getRadius: hid, getLineWidth: hid },
+      updateTriggers: { getFillColor: hid, getRadius: hid, getLineWidth: hid, _dimAll: dimAll },
 
       getPosition: (e: AssignmentEvent) => [e.incident.longitude, e.incident.latitude],
 
       getRadius: (e: AssignmentEvent) => {
+        if (dimAll) return 7
         if (hid === null) return 8
-        return e.assignment_id === hid ? 11 : 7   // hovered: +37%, others: slightly smaller
+        return e.assignment_id === hid ? 11 : 7
       },
       radiusUnits:    'pixels',
       radiusMinPixels: 4,
       radiusMaxPixels: 22,
 
       getFillColor: (e: AssignmentEvent): [number, number, number, number] => {
+        if (dimAll) return [239, 68, 68, 50]
         if (hid === null) return [239, 68, 68, 220]
         return e.assignment_id === hid
-          ? [239,  68,  68, 255]   // full brightness
-          : [239,  68,  68,  70]   // dimmed
+          ? [239,  68,  68, 255]
+          : [239,  68,  68,  70]
       },
 
       getLineColor: (e: AssignmentEvent): [number, number, number, number] => {
+        if (dimAll) return [255, 255, 255, 30]
         if (hid === null) return [255, 255, 255, 200]
         return e.assignment_id === hid
-          ? [255, 255, 255, 255]   // crisp white ring on hover
+          ? [255, 255, 255, 255]
           : [255, 255, 255,  60]
       },
       getLineWidth: (e: AssignmentEvent) => (hid !== null && e.assignment_id === hid ? 2.5 : 1.5),
@@ -312,16 +317,18 @@ export function useObservatoryMap(
     const withPos = assignmentData.filter((e) => e.adjuster != null)
     if (!withPos.length) return null
 
-    const hid = hoveredAssignmentId
+    const hid    = hoveredAssignmentId
+    const dimAll = hoveredFreeAdjId !== null
 
     return new ScatterplotLayer({
       id:   'adjusters',
       data: withPos,
-      updateTriggers: { getFillColor: hid, getRadius: hid, getLineWidth: hid },
+      updateTriggers: { getFillColor: hid, getRadius: hid, getLineWidth: hid, _dimAll: dimAll },
 
       getPosition: (e: AssignmentEvent) => [e.adjuster!.longitude, e.adjuster!.latitude],
 
       getRadius: (e: AssignmentEvent) => {
+        if (dimAll) return 6
         if (hid === null) return 7
         return e.assignment_id === hid ? 10 : 6
       },
@@ -330,6 +337,7 @@ export function useObservatoryMap(
       radiusMaxPixels: 20,
 
       getFillColor: (e: AssignmentEvent): [number, number, number, number] => {
+        if (dimAll) return [99, 102, 241, 50]
         if (hid === null) return [99, 102, 241, 230]
         return e.assignment_id === hid
           ? [99, 102, 241, 255]
@@ -337,6 +345,7 @@ export function useObservatoryMap(
       },
 
       getLineColor: (e: AssignmentEvent): [number, number, number, number] => {
+        if (dimAll) return [255, 255, 255, 30]
         if (hid === null) return [255, 255, 255, 200]
         return e.assignment_id === hid
           ? [255, 255, 255, 255]
@@ -439,26 +448,56 @@ export function useObservatoryMap(
     if (!layerVisibility.value.free_adjusters || !ScatterplotLayer) return null
     if (!freeAdjData.length) return null
 
+    const hid = hoveredFreeAdjId
+
     return new ScatterplotLayer({
       id:   'free-adjusters',
       data: freeAdjData,
+      updateTriggers: { getFillColor: hid, getRadius: hid, getLineWidth: hid },
+
       getPosition: (a: FreeAdjuster) => [a.longitude, a.latitude],
-      getRadius:        6,
-      radiusUnits:      'pixels',
-      radiusMinPixels:  4,
-      radiusMaxPixels:  14,
-      getFillColor:     FREE_ADJ_COLOR,
-      getLineColor:     [255, 255, 255, 160] as [number, number, number, number],
-      getLineWidth:     1.5,
-      stroked:          true,
-      lineWidthUnits:   'pixels',
-      pickable:         true,
+
+      getRadius: (a: FreeAdjuster) => {
+        if (hid === null) return 6
+        return a.id === hid ? 9 : 5   // hovered: bigger, others: slightly smaller
+      },
+      radiusUnits:     'pixels',
+      radiusMinPixels: 4,
+      radiusMaxPixels: 18,
+
+      getFillColor: (a: FreeAdjuster): [number, number, number, number] => {
+        if (hid === null) return FREE_ADJ_COLOR
+        return a.id === hid
+          ? [209, 213, 219, 255]   // gray-300, full brightness on hover
+          : [156, 163, 175,  60]   // gray-400, heavily dimmed
+      },
+
+      getLineColor: (a: FreeAdjuster): [number, number, number, number] => {
+        if (hid === null) return [255, 255, 255, 160]
+        return a.id === hid
+          ? [255, 255, 255, 255]   // crisp white ring on hover
+          : [255, 255, 255,  40]
+      },
+      getLineWidth: (a: FreeAdjuster) => (hid !== null && a.id === hid ? 2.5 : 1.5),
+
+      stroked:        true,
+      lineWidthUnits: 'pixels',
+      pickable:       true,
+
       onHover: ({ object, x, y }: { object: FreeAdjuster | null; x: number; y: number }) => {
         if (mapInstance) {
           mapInstance.getCanvas().style.cursor = object ? 'pointer' : ''
         }
-        // Free adjuster hover doesn't interact with assignment highlighting
+        const newId = object?.id ?? null
+        if (newId === hoveredFreeAdjId) return   // no change — skip re-render
+
+        hoveredFreeAdjId = newId
+        hoveredTooltip.value = object
+          ? { type: 'free_adjuster', x, y, adjuster: object }
+          : null
+        _render()
       },
+
       onClick: ({ object }: { object: FreeAdjuster | null }) => {
         if (!object) return
         clickedFeature.value = { type: 'free_adjuster', freeAdjuster: object }

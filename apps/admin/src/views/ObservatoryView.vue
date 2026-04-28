@@ -492,32 +492,47 @@ const STATUS_LABEL: Record<string, string> = {
               top:  `${hoveredTooltip.y - 16}px`,
             }"
           >
-            <!-- Status pill -->
-            <div class="mtt-status-row">
-              <span class="mtt-dot" :class="`mtt-dot--${hoveredTooltip.event.status}`" />
-              <span class="mtt-status">{{ STATUS_LABEL[hoveredTooltip.event.status] ?? hoveredTooltip.event.status }}</span>
-              <span class="mtt-id">#{{ hoveredTooltip.event.assignment_id }}</span>
-            </div>
-            <!-- Incident type + severity -->
-            <div class="mtt-type">
-              <span class="mtt-badge">{{ hoveredTooltip.event.incident.type.replace(/_/g, ' ') }}</span>
-              <span class="mtt-severity" :data-lvl="hoveredTooltip.event.incident.severity">
-                Sev {{ hoveredTooltip.event.incident.severity }}
-              </span>
-            </div>
-            <!-- Address (truncated) -->
-            <div v-if="hoveredTooltip.event.incident.address" class="mtt-address">
-              {{ hoveredTooltip.event.incident.address }}
-            </div>
-            <!-- Distance + ETA -->
-            <div v-if="hoveredTooltip.event.distance_km || hoveredTooltip.event.travel_time_minutes" class="mtt-meta">
-              <span v-if="hoveredTooltip.event.distance_km">
-                📍 {{ hoveredTooltip.event.distance_km.toFixed(1) }} km
-              </span>
-              <span v-if="hoveredTooltip.event.travel_time_minutes">
-                ⏱ {{ hoveredTooltip.event.travel_time_minutes }} min
-              </span>
-            </div>
+            <!-- ── Assignment tooltip ────────────────────────────── -->
+            <template v-if="hoveredTooltip.type === 'assignment'">
+              <div class="mtt-status-row">
+                <span class="mtt-dot" :class="`mtt-dot--${hoveredTooltip.event.status}`" />
+                <span class="mtt-status">{{ STATUS_LABEL[hoveredTooltip.event.status] ?? hoveredTooltip.event.status }}</span>
+                <span class="mtt-id">#{{ hoveredTooltip.event.assignment_id }}</span>
+              </div>
+              <div class="mtt-type">
+                <span class="mtt-badge">{{ hoveredTooltip.event.incident.type.replace(/_/g, ' ') }}</span>
+                <span class="mtt-severity" :data-lvl="hoveredTooltip.event.incident.severity">
+                  Sev {{ hoveredTooltip.event.incident.severity }}
+                </span>
+              </div>
+              <div v-if="hoveredTooltip.event.incident.address" class="mtt-address">
+                {{ hoveredTooltip.event.incident.address }}
+              </div>
+              <div v-if="hoveredTooltip.event.distance_km || hoveredTooltip.event.travel_time_minutes" class="mtt-meta">
+                <span v-if="hoveredTooltip.event.distance_km">
+                  📍 {{ hoveredTooltip.event.distance_km.toFixed(1) }} km
+                </span>
+                <span v-if="hoveredTooltip.event.travel_time_minutes">
+                  ⏱ {{ hoveredTooltip.event.travel_time_minutes }} min
+                </span>
+              </div>
+            </template>
+
+            <!-- ── Free adjuster tooltip ─────────────────────────── -->
+            <template v-else-if="hoveredTooltip.type === 'free_adjuster'">
+              <div class="mtt-status-row">
+                <span class="mtt-dot mtt-dot--free" />
+                <span class="mtt-status">{{ hoveredTooltip.adjuster.first_name }} {{ hoveredTooltip.adjuster.last_name }}</span>
+              </div>
+              <div class="mtt-type">
+                <span class="mtt-badge mtt-badge--free">Disponible</span>
+              </div>
+              <div class="mtt-address mtt-address--coords">
+                {{ hoveredTooltip.adjuster.latitude.toFixed(4) }},
+                {{ hoveredTooltip.adjuster.longitude.toFixed(4) }}
+              </div>
+            </template>
+
             <div class="mtt-hint">Clic para ver detalle</div>
           </div>
         </Transition>
@@ -943,6 +958,7 @@ const STATUS_LABEL: Record<string, string> = {
 .mtt-dot--in_progress  { background: #22c55e; }
 .mtt-dot--completed    { background: #6b7280; }
 .mtt-dot--cancelled    { background: #ef4444; }
+.mtt-dot--free         { background: #9ca3af; }
 
 .mtt-status {
   font-size: 0.78rem;
@@ -972,6 +988,18 @@ const STATUS_LABEL: Record<string, string> = {
   padding: 0.1rem 0.4rem;
   text-transform: capitalize;
   white-space: nowrap;
+}
+
+.mtt-badge--free {
+  background: rgba(156, 163, 175, 0.2);
+  color: #d1d5db;
+}
+
+.mtt-address--coords {
+  font-family: monospace;
+  font-size: 0.72rem;
+  color: #6b7280;
+  letter-spacing: -0.01em;
 }
 
 .mtt-severity {
