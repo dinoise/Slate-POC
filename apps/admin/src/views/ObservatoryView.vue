@@ -8,7 +8,7 @@ import Slider from 'primevue/slider'
 import ProgressSpinner from 'primevue/progressspinner'
 import Badge from 'primevue/badge'
 
-import { useObservatorySSE, useObservatoryMap, getMXCurrentSlot, formatMXDate } from '@slate/composables'
+import { useObservatorySSE, useObservatoryMap, getMXCurrentSlot } from '@slate/composables'
 import { demandApi, recommendationsApi } from '@slate/api-client'
 import type { DemandPrediction, RecommendationResponse } from '@slate/types'
 
