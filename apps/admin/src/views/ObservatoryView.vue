@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
@@ -31,6 +32,9 @@ const {
   onViewportChange,
   destroy,
 } = useObservatoryMap(mapContainer)
+
+// ── Router ────────────────────────────────────────────────────────────────────
+const router = useRouter()
 
 // Last known viewport bbox — updated by map moveend/zoomend via onViewportChange.
 // Fallback is CDMX until the map has loaded and emitted its first viewport event.
@@ -606,6 +610,23 @@ const STATUS_LABEL: Record<string, string> = {
             <span class="drawer-label">Proveedor ruta</span>
             <span class="drawer-value muted">{{ clickedFeature.assignmentEvent.route.provider }}</span>
           </div>
+          <div class="drawer-actions">
+            <Button
+              v-if="clickedFeature.assignmentEvent.adjuster?.id"
+              label="Ver ajustador"
+              icon="pi pi-user"
+              severity="secondary"
+              size="small"
+              @click="router.push({ name: 'adjuster-detail', params: { id: clickedFeature!.assignmentEvent!.adjuster!.id } })"
+            />
+            <Button
+              label="Ver siniestro"
+              icon="pi pi-map-marker"
+              severity="secondary"
+              size="small"
+              @click="router.push({ name: 'incident-detail', params: { id: clickedFeature!.assignmentEvent!.incident.id } })"
+            />
+          </div>
         </div>
 
         <!-- Recommendation destination feature -->
@@ -657,6 +678,15 @@ const STATUS_LABEL: Record<string, string> = {
           </div>
           <div class="drawer-row">
             <Badge value="Disponible" severity="success" />
+          </div>
+          <div class="drawer-actions">
+            <Button
+              label="Ver ajustador"
+              icon="pi pi-user"
+              severity="secondary"
+              size="small"
+              @click="router.push({ name: 'adjuster-detail', params: { id: clickedFeature!.freeAdjuster!.id } })"
+            />
           </div>
         </div>
       </template>
@@ -1122,5 +1152,14 @@ const STATUS_LABEL: Record<string, string> = {
   font-size: 0.82rem;
   color: var(--p-surface-200);
   word-break: break-all;
+}
+
+.drawer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--p-surface-700);
 }
 </style>
