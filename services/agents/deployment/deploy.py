@@ -80,14 +80,21 @@ def _versioned_name(base: str) -> str:
 
 def create_agent() -> str:
     """Create a new Agent Engine instance. Prints the numeric ID to stdout."""
+    import cloudpickle  # type: ignore[import-untyped]
     import vertexai  # type: ignore[import-untyped]
     from vertexai import agent_engines  # type: ignore[import-untyped]
 
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     location = os.environ["GOOGLE_CLOUD_LOCATION"]
-    vertexai.init(project=project, location=location, staging_bucket=os.environ["STAGING_BUCKET"])
+    staging_bucket = os.environ["STAGING_BUCKET"]
+    vertexai.init(project=project, location=location, staging_bucket=staging_bucket)
 
     adk_app = _build_adk_app()
+
+    # Verify the AdkApp is pickleable before attempting remote deployment.
+    pickle_size = len(cloudpickle.dumps(adk_app))
+    logger.info("AdkApp pickle size: %d bytes (staging_bucket=%s)", pickle_size, staging_bucket)
+
     display_name = _versioned_name("slate-agents-dev")
 
     logger.info("Creating Agent Engine: %s", display_name)
@@ -104,12 +111,14 @@ def create_agent() -> str:
 
 def update_agent(resource_id: str) -> str:
     """Update an existing Agent Engine instance. Prints the numeric ID to stdout."""
+    import cloudpickle  # type: ignore[import-untyped]
     import vertexai  # type: ignore[import-untyped]
     from vertexai import agent_engines  # type: ignore[import-untyped]
 
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     location = os.environ["GOOGLE_CLOUD_LOCATION"]
-    vertexai.init(project=project, location=location, staging_bucket=os.environ["STAGING_BUCKET"])
+    staging_bucket = os.environ["STAGING_BUCKET"]
+    vertexai.init(project=project, location=location, staging_bucket=staging_bucket)
 
     resource_name = (
         f"projects/{project}/locations/{location}/reasoningEngines/{resource_id}"
@@ -118,6 +127,11 @@ def update_agent(resource_id: str) -> str:
     )
 
     adk_app = _build_adk_app()
+
+    # Verify the AdkApp is pickleable before attempting remote deployment.
+    pickle_size = len(cloudpickle.dumps(adk_app))
+    logger.info("AdkApp pickle size: %d bytes (staging_bucket=%s)", pickle_size, staging_bucket)
+
     display_name = _versioned_name("slate-agents-dev")
 
     logger.info("Updating Agent Engine: %s → %s", resource_name, display_name)

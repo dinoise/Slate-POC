@@ -159,7 +159,8 @@ jobs:
         run: |
           uv run python deployment/deploy.py \
             --health \
-            --agent-engine-id=${{ steps.deploy.outputs.agent_engine_id }}
+            --resource-id=${{ steps.deploy.outputs.agent_engine_id }}
         env:
           GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
           GOOGLE_CLOUD_LOCATION: ${{ env.GOOGLE_CLOUD_LOCATION }}
+          STAGING_BUCKET: gs://lennken-poc-agents-staging
