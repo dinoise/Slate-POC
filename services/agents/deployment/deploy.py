@@ -104,7 +104,7 @@ def create_agent() -> str:
         display_name=display_name,
         env_vars=_env_vars(),
     )
-    name = remote.api_resource.name
+    name = remote.gca_resource.name
     logger.info("Created Agent Engine: %s", name)
     return name
 
@@ -142,7 +142,7 @@ def update_agent(resource_id: str) -> str:
         display_name=display_name,
         env_vars=_env_vars(),
     )
-    name = remote.api_resource.name
+    name = remote.gca_resource.name
     logger.info("Updated Agent Engine: %s", name)
     return name
 
