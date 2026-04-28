@@ -8,11 +8,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from slate_jobs.demand_refresh.main import _build_slots, _run
 from slate_jobs.demand_refresh.predictor import SlotPrediction
+
+_CDMX = ZoneInfo("America/Mexico_City")
 
 # ── _build_slots ──────────────────────────────────────────────────────────────
 
@@ -37,16 +40,18 @@ def test_build_slots_consecutive_hours() -> None:
         assert dts[i] - dts[i - 1] == timedelta(hours=1)
 
 
-def test_build_slots_hora_matches_datetime() -> None:
+def test_build_slots_hora_matches_cdmx_hour() -> None:
+    """hora must reflect local CDMX hour, not UTC hour."""
     slots = _build_slots(24)
     for hora, _dia, dt in slots:
-        assert hora == dt.hour
+        assert hora == dt.astimezone(_CDMX).hour
 
 
-def test_build_slots_dia_matches_datetime() -> None:
+def test_build_slots_dia_matches_cdmx_weekday() -> None:
+    """dia_semana must reflect local CDMX weekday, not UTC weekday."""
     slots = _build_slots(24)
     for _hora, dia, dt in slots:
-        assert dia == dt.weekday()
+        assert dia == dt.astimezone(_CDMX).weekday()
 
 
 def test_build_slots_starts_in_future() -> None:

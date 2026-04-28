@@ -8,7 +8,7 @@ import Button from 'primevue/button'
 import ProgressSpinner from 'primevue/progressspinner'
 import Tag from 'primevue/tag'
 import { incidentsApi, assignmentsApi } from '@slate/api-client'
-import { useIncidentSSE, useRoute as useRouteComposable } from '@slate/composables'
+import { useIncidentSSE, useRoute as useRouteComposable, formatMXDate } from '@slate/composables'
 import type { Incident, Assignment } from '@slate/types'
 import { AssignmentStatus } from '@slate/types'
 import EmptyState from '../components/EmptyState.vue'
@@ -264,11 +264,11 @@ const severityLabelMap: Record<number, string> = { 1: 'Muy leve', 2: 'Leve', 3: 
               </div>
               <div class="info-row">
                 <dt>Creado</dt>
-                <dd>{{ new Date(incident.created_at).toLocaleString('es-MX') }}</dd>
+                <dd>{{ formatMXDate(incident.created_at) }}</dd>
               </div>
               <div class="info-row">
                 <dt>Actualizado</dt>
-                <dd>{{ new Date(incident.updated_at).toLocaleString('es-MX') }}</dd>
+                <dd>{{ formatMXDate(incident.updated_at) }}</dd>
               </div>
             </dl>
           </template>

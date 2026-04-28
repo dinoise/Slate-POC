@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from slate_infra.logging import get_logger, setup_logging
 
@@ -26,24 +27,24 @@ from .repository import upsert_predictions
 
 logger = get_logger(__name__)
 
+_CDMX = ZoneInfo("America/Mexico_City")
+
 
 def _build_slots(hours_ahead: int) -> list[tuple[int, int, datetime]]:
     """Return (hora, dia_semana, predicted_for) tuples for the next N hours.
 
-    Slots are aligned to full UTC hours starting at the next whole hour,
-    matching the time boundaries used by the adjuster app when querying
-    demand_predictions.
+    predicted_for is UTC-aware (stored as-is in the DB).
+    hora and dia_semana are extracted from the slot converted to America/Mexico_City
+    so they match the local-time patterns the LightGBM model was trained on.
     """
     now = datetime.now(UTC)
     base = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    return [
-        (
-            (base + timedelta(hours=offset)).hour,
-            (base + timedelta(hours=offset)).weekday(),
-            base + timedelta(hours=offset),
-        )
-        for offset in range(hours_ahead)
-    ]
+    slots = []
+    for offset in range(hours_ahead):
+        slot_utc = base + timedelta(hours=offset)
+        slot_cdmx = slot_utc.astimezone(_CDMX)
+        slots.append((slot_cdmx.hour, slot_cdmx.weekday(), slot_utc))
+    return slots
 
 
 async def _run() -> None:

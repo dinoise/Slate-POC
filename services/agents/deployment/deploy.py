@@ -17,7 +17,7 @@ import argparse
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ def _env_vars() -> dict[str, str]:
 
 
 def _versioned_name(base: str) -> str:
-    version = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    version = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     git_sha = os.getenv("GITHUB_SHA", "local")[:7]
     return f"{base}-v{version}-{git_sha}"
 

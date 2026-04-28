@@ -10,6 +10,7 @@ import EmptyState from '../components/EmptyState.vue'
 import { useIncidentsStore } from '../stores/incidents'
 import { useAdjustersStore } from '../stores/adjusters'
 import { useAssignmentsStore } from '../stores/assignments'
+import { formatMXDate } from '@slate/composables'
 
 const router = useRouter()
 const incidentsStore = useIncidentsStore()
@@ -144,7 +145,7 @@ onMounted(() => {
           <Column field="address" header="Dirección" />
           <Column header="Fecha" style="width: 160px">
             <template #body="{ data }">
-              {{ new Date(data.created_at).toLocaleString('es-MX') }}
+              {{ formatMXDate(data.created_at) }}
             </template>
           </Column>
           <template #empty>

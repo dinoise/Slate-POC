@@ -12,6 +12,7 @@ import EmptyState from '../components/EmptyState.vue'
 import { useAssignmentsStore } from '../stores/assignments'
 import { useIncidentsStore } from '../stores/incidents'
 import { useAdjustersStore } from '../stores/adjusters'
+import { formatMXDate } from '@slate/composables'
 
 const router = useRouter()
 const assignmentsStore = useAssignmentsStore()
@@ -190,13 +191,13 @@ onMounted(() => {
 
       <Column header="Asignado" style="width: 160px" sortable sort-field="assigned_at">
         <template #body="{ data }">
-          {{ new Date(data.assigned_at).toLocaleString('es-MX') }}
+          {{ formatMXDate(data.assigned_at) }}
         </template>
       </Column>
 
       <Column header="Completado" style="width: 160px">
         <template #body="{ data }">
-          {{ data.completed_at ? new Date(data.completed_at).toLocaleString('es-MX') : '—' }}
+          {{ formatMXDate(data.completed_at) }}
         </template>
       </Column>
     </DataTable>

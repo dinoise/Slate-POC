@@ -8,6 +8,7 @@ import InputText from 'primevue/inputtext'
 import ProgressSpinner from 'primevue/progressspinner'
 import EmptyState from '../components/EmptyState.vue'
 import { usersApi } from '@slate/api-client'
+import { formatMXDate } from '@slate/composables'
 import type { User } from '@slate/types'
 
 const users = ref<User[]>([])
@@ -89,7 +90,7 @@ onMounted(async () => {
 
           <Column header="Registro" style="width: 160px" sort-field="created_at" sortable>
             <template #body="{ data }">
-              {{ new Date(data.created_at).toLocaleString('es-MX') }}
+              {{ formatMXDate(data.created_at) }}
             </template>
           </Column>
         </DataTable>

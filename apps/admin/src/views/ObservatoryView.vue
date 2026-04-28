@@ -8,7 +8,7 @@ import Slider from 'primevue/slider'
 import ProgressSpinner from 'primevue/progressspinner'
 import Badge from 'primevue/badge'
 
-import { useObservatorySSE, useObservatoryMap } from '@slate/composables'
+import { useObservatorySSE, useObservatoryMap, getMXCurrentSlot, formatMXDate } from '@slate/composables'
 import { demandApi, recommendationsApi } from '@slate/api-client'
 import type { DemandPrediction, RecommendationResponse } from '@slate/types'
 
@@ -33,18 +33,12 @@ const hourOptions = Array.from({ length: 24 }, (_, h) => ({
   value: h,
 }))
 
-function nowSlot() {
-  // JS getDay(): 0=Sun … 6=Sat — convert to 0=Mon … 6=Sun
-  const jsDay = new Date().getDay()
-  return { dia: jsDay === 0 ? 6 : jsDay - 1, hora: new Date().getHours() }
-}
-
-const { dia: initialDia, hora: initialHora } = nowSlot()
+const { dia: initialDia, hora: initialHora } = getMXCurrentSlot()
 const selectedDay  = ref<number>(initialDia)
 const selectedHour = ref<number>(initialHora)
 
 function goToNow() {
-  const s = nowSlot()
+  const s = getMXCurrentSlot()
   selectedDay.value  = s.dia
   selectedHour.value = s.hora
 }

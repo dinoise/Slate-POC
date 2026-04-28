@@ -1,3 +1,4 @@
+export { formatMXDate, formatMXTime, getMXCurrentSlot } from './dateUtils'
 export { useSSE } from './useSSE'
 export { useIncidentSSE } from './useIncidentSSE'
 export type { UseIncidentSSEReturn } from './useIncidentSSE'

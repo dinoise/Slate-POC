@@ -10,6 +10,7 @@ import Select from 'primevue/select'
 import ProgressSpinner from 'primevue/progressspinner'
 import EmptyState from '../components/EmptyState.vue'
 import { useAdjustersStore } from '../stores/adjusters'
+import { formatMXDate } from '@slate/composables'
 
 const router = useRouter()
 const adjustersStore = useAdjustersStore()
@@ -182,7 +183,7 @@ onMounted(() => {
 
           <Column header="Actualizado" style="width: 160px" sort-field="updated_at" sortable>
             <template #body="{ data }">
-              {{ new Date(data.updated_at).toLocaleString('es-MX') }}
+              {{ formatMXDate(data.updated_at) }}
             </template>
           </Column>
         </DataTable>

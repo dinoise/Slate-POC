@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 import numpy as np
 from sqlalchemy.exc import IntegrityError
@@ -439,7 +439,7 @@ class AssignmentService:
                     assignment = await self.repository.create(
                         incident_id=incident.incident_id,
                         adjuster_id=adjuster.adjuster_id,
-                        assigned_at=datetime.now(),
+                        assigned_at=datetime.now(UTC),
                         travel_time_minutes=travel_min,
                         status=AssignmentStatus.ASSIGNED,
                     )

@@ -4,7 +4,7 @@ import { useRoute as useVueRoute, useRouter } from 'vue-router'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useReporterSessionStore } from '@/stores/reporterSession'
-import { useIncidentSSE, useRoute } from '@slate/composables'
+import { useIncidentSSE, useRoute, formatMXTime } from '@slate/composables'
 import { adjustersApi } from '@slate/api-client'
 import type { Adjuster } from '@slate/types'
 import { AssignmentStatus, TERMINAL_ASSIGNMENT_STATUSES } from '@slate/types'
@@ -178,8 +178,7 @@ watch(assignmentStatus, (newStatus, oldStatus) => {
 })
 
 function formatETA(isoDate: string | null | undefined): string {
-  if (!isoDate) return '—'
-  return new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(isoDate))
+  return formatMXTime(isoDate)
 }
 
 function formatDistance(km: number | null | undefined): string {

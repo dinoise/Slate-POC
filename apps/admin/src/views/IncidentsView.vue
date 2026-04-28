@@ -10,6 +10,7 @@ import Select from 'primevue/select'
 import Button from 'primevue/button'
 import EmptyState from '../components/EmptyState.vue'
 import { useIncidentsStore } from '../stores/incidents'
+import { formatMXDate } from '@slate/composables'
 
 const router = useRouter()
 const store = useIncidentsStore()
@@ -143,7 +144,7 @@ onMounted(() => store.fetchAll())
 
       <Column header="Fecha" style="width: 160px" sortable sort-field="created_at">
         <template #body="{ data }">
-          {{ new Date(data.created_at).toLocaleString('es-MX') }}
+          {{ formatMXDate(data.created_at) }}
         </template>
       </Column>
 

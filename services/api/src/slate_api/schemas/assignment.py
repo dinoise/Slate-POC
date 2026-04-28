@@ -1,6 +1,6 @@
 """Pydantic schemas for Assignment model."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -29,7 +29,7 @@ class AssignmentBase(BaseModel):
 class AssignmentCreate(AssignmentBase):
     """Schema for creating an Assignment."""
 
-    assigned_at: datetime = Field(default_factory=datetime.now)
+    assigned_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class AssignmentUpdate(BaseModel):

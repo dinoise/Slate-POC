@@ -9,6 +9,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import ProgressSpinner from 'primevue/progressspinner'
 import { adjustersApi, assignmentsApi } from '@slate/api-client'
+import { formatMXDate } from '@slate/composables'
 import type { Adjuster, Assignment } from '@slate/types'
 import EmptyState from '../components/EmptyState.vue'
 
@@ -139,7 +140,7 @@ onMounted(async () => {
               </div>
               <div class="info-row">
                 <dt>Registro</dt>
-                <dd>{{ new Date(adjuster.created_at).toLocaleString('es-MX') }}</dd>
+                <dd>{{ formatMXDate(adjuster.created_at) }}</dd>
               </div>
             </dl>
           </template>
@@ -227,12 +228,12 @@ onMounted(async () => {
             </Column>
             <Column header="Asignado" style="width: 160px" sortable sort-field="assigned_at">
               <template #body="{ data }">
-                {{ new Date(data.assigned_at).toLocaleString('es-MX') }}
+                {{ formatMXDate(data.assigned_at) }}
               </template>
             </Column>
             <Column header="Completado" style="width: 160px">
               <template #body="{ data }">
-                {{ data.completed_at ? new Date(data.completed_at).toLocaleString('es-MX') : '—' }}
+                {{ formatMXDate(data.completed_at) }}
               </template>
             </Column>
           </DataTable>
