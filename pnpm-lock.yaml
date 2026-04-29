@@ -161,6 +161,9 @@ importers:
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
+      leaflet-ant-path:
+        specifier: ^1.3.0
+        version: 1.3.0
       maplibre-gl:
         specifier: ^5.24.0
         version: 5.24.0

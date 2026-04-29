@@ -72,3 +72,41 @@ async def observatory_snapshot(
     rows = await repo.get_all_active_enriched()
     logger.info("Observatory snapshot: returning %d active assignments", len(rows))
     return [Enricher.build_from_enriched(row) for row in rows]
+
+
+@router.get(
+    "/snapshot/incidents/{incident_id}",
+    dependencies=[Depends(verify_google_token)],
+    response_model=list[EnrichedAssignmentEvent],
+    summary="Snapshot of active assignments for one incident",
+    description=(
+        "Returns all currently active assignments for the given incident as "
+        "``EnrichedAssignmentEvent`` objects — the same shape as SSE events "
+        "from ``/notifications/stream/incidents/{incident_id}``. "
+        "Call once on mount to populate the incident detail map before opening "
+        "the SSE stream."
+    ),
+)
+async def incident_snapshot(
+    incident_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> list[EnrichedAssignmentEvent]:
+    """Fetch active assignments for one incident enriched with adjuster data.
+
+    Args:
+        incident_id: PK of the incident to query.
+        db: Async DB session injected by FastAPI.
+
+    Returns:
+        List of ``EnrichedAssignmentEvent`` — one per active assignment.
+        Empty list when the incident has no active assignments (pending
+        or fully terminal state).
+    """
+    repo = AssignmentRepository(db)
+    rows = await repo.get_by_incident(incident_id)
+    logger.info(
+        "Incident snapshot: incident_id=%d, returning %d active assignments",
+        incident_id,
+        len(rows),
+    )
+    return [Enricher.build_from_enriched(row) for row in rows]

@@ -70,7 +70,7 @@ const demandCache = new Map<string, DemandPrediction[]>()
 /** Ensure the bbox has at least 0.1° spread so the API never receives a
  *  collapsed box (minLat==maxLat) when zoomed in too far. */
 function _expandBbox(bbox: string): string {
-  const [minLat, minLon, maxLat, maxLon] = bbox.split(',').map(Number)
+  const [minLat, minLon, maxLat, maxLon] = bbox.split(',').map(Number) as [number, number, number, number]
   const MIN_SPREAD = 0.1
   const latSpread = maxLat - minLat
   const lonSpread = maxLon - minLon

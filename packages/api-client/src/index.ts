@@ -191,6 +191,19 @@ export const notificationsApi = {
       return r.json() as Promise<AssignmentEvent[]>
     })
   },
+
+  /** Snapshot of currently active assignments for one incident — same shape as
+   *  SSE events from /notifications/stream/incidents/{id}. Call once on mount
+   *  to populate the incident detail map before opening the SSE stream.
+   *  Uses Bearer header (not ?token=) — regular REST fetch, not EventSource. */
+  incidentSnapshot(incidentId: number): Promise<AssignmentEvent[]> {
+    const headers: Record<string, string> = {}
+    if (_authToken) headers['Authorization'] = `Bearer ${_authToken}`
+    return fetch(`${_notifUrl()}/notifications/snapshot/incidents/${incidentId}`, { headers }).then((r) => {
+      if (!r.ok) throw new Error(`snapshot ${r.status}`)
+      return r.json() as Promise<AssignmentEvent[]>
+    })
+  },
 }
 
 // ── Recommendations ───────────────────────────────────────────────────────────

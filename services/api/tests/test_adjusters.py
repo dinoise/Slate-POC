@@ -131,6 +131,6 @@ async def test_reset_status(client: AsyncClient, db_session: AsyncSession) -> No
 
 async def test_get_available_adjusters(client: AsyncClient, db_session: AsyncSession) -> None:
     await create_adjuster(db_session, status="available", is_active=True)
-    response = await client.get(_BASE + "/available/")
+    response = await client.get(_BASE + "/available")
     assert response.status_code == 200
     assert isinstance(response.json(), list)

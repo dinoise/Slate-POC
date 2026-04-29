@@ -89,6 +89,64 @@ class AssignmentRepository:
             adjuster_lon=adjuster.home_longitude,
         )
 
+    async def get_by_incident(self, incident_id: int) -> list[EnrichedAssignment]:
+        """Return enriched projections for all currently active assignments
+        belonging to a specific incident.
+
+        Same three-table JOIN as ``get_all_active_enriched`` but filtered to
+        ``Assignment.incident_id == incident_id`` in addition to the
+        active-status constraint.
+
+        Used by the incident snapshot endpoint to populate the incident detail
+        map on initial load, before the SSE stream has delivered any events.
+        Typically returns 0 or 1 items — an incident has at most one active
+        assignment at a time under current business rules.
+
+        Args:
+            incident_id: PK of the incident to query.
+
+        Returns:
+            List of ``EnrichedAssignment`` dataclasses ordered by
+            ``assigned_at`` descending.  Empty list when the incident has no
+            active assignments.
+        """
+        result = await self.db.execute(
+            select(Assignment, Incident, Adjuster)
+            .join(Incident, Incident.id == Assignment.incident_id)
+            .join(Adjuster, Adjuster.id == Assignment.adjuster_id)
+            .where(
+                Assignment.incident_id == incident_id,
+                Assignment.status.in_(_ACTIVE_STATUSES),
+            )
+            .order_by(Assignment.assigned_at.desc())
+        )
+        rows = result.all()
+        return [
+            EnrichedAssignment(
+                assignment_id=a.id,
+                adjuster_id=a.adjuster_id,
+                incident_id=a.incident_id,
+                status=a.status,
+                distance_km=a.distance_km,
+                travel_time_minutes=a.travel_time_minutes,
+                assigned_at=a.assigned_at,
+                route_polyline=a.route_polyline,
+                route_provider=a.route_provider,
+                route_distance_m=a.route_distance_m,
+                route_duration_s=a.route_duration_s,
+                route_traffic_segments=a.route_traffic_segments,
+                incident_type=inc.incident_type,
+                severity=inc.severity,
+                description=inc.description,
+                address=inc.address,
+                latitude=inc.latitude,
+                longitude=inc.longitude,
+                adjuster_lat=adj.home_latitude,
+                adjuster_lon=adj.home_longitude,
+            )
+            for a, inc, adj in rows
+        ]
+
     async def get_all_active_enriched(self) -> list[EnrichedAssignment]:
         """Return enriched projections for all currently active assignments.
 

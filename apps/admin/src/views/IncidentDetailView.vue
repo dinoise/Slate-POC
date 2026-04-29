@@ -3,19 +3,20 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet-ant-path'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import ProgressSpinner from 'primevue/progressspinner'
 import Tag from 'primevue/tag'
-import { incidentsApi, assignmentsApi } from '@slate/api-client'
+import { incidentsApi, assignmentsApi, notificationsApi } from '@slate/api-client'
 import { useIncidentSSE, useRoute as useRouteComposable, formatMXDate } from '@slate/composables'
-import type { Incident, Assignment } from '@slate/types'
+import type { Incident, Assignment, AssignmentEvent } from '@slate/types'
 import { AssignmentStatus } from '@slate/types'
 import EmptyState from '../components/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { decodePolyline } = useRouteComposable()
+const { buildRouteLayer, removeRouteLayer, routeFromPayload } = useRouteComposable()
 
 const incidentId = computed(() => Number(route.params.id))
 
@@ -87,12 +88,22 @@ watch(sseEvent, (ev) => {
     }
   }
 
-  // Update map with new polyline if available
-  if (ev.route?.polyline) drawPolyline(decodePolyline(ev.route.polyline))
+  // Update adjuster marker position
+  if (ev.adjuster) {
+    placeAdjusterMarker(ev.adjuster.latitude, ev.adjuster.longitude)
+  }
 
-  // Clear route on terminal
+  // Update route polyline
+  if (ev.route?.polyline) {
+    drawRoute(ev.route)
+  }
+
+  // Clear map layers on terminal status
   if (ev.status === AssignmentStatus.CANCELLED || ev.status === AssignmentStatus.COMPLETED) {
-    if (map && routeLine) { map.removeLayer(routeLine); routeLine = null }
+    if (map) {
+      if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+      if (adjusterMarker) { map.removeLayer(adjusterMarker); adjusterMarker = null }
+    }
   }
 })
 
@@ -101,11 +112,21 @@ watch(sseEvent, (ev) => {
 const mapContainer = ref<HTMLElement>()
 let map: L.Map | null = null
 let incidentMarker: L.Marker | null = null
-let routeLine: L.Polyline | null = null
+let adjusterMarker: L.Marker | null = null
+let routeLayer: L.Layer | null = null
+
+/** Snapshot event — active assignment enriched with adjuster + route data.
+ *  Used to initialize the map markers before the SSE stream delivers events. */
+const snapshotEvent = ref<AssignmentEvent | null>(null)
 
 const incIcon = L.divIcon({
   html: '<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));">📍</div>',
   iconSize: [26, 26], iconAnchor: [13, 26], className: '',
+})
+
+const adjIcon = L.divIcon({
+  html: '<div style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));">🔵</div>',
+  iconSize: [24, 24], iconAnchor: [12, 12], className: '',
 })
 
 function initMap() {
@@ -121,25 +142,53 @@ function initMap() {
 function updateMapMarkers() {
   if (!map || !incident.value) return
   const inc = incident.value
-  const asgn = activeAssignment.value
 
+  // Incident marker — always present
   if (incidentMarker) map.removeLayer(incidentMarker)
   incidentMarker = L.marker([inc.latitude, inc.longitude], { icon: incIcon })
     .bindTooltip('Siniestro').addTo(map)
 
-  if (asgn?.route_polyline) {
-    drawPolyline(decodePolyline(asgn.route_polyline))
-  } else {
+  const ev = snapshotEvent.value
+  if (ev?.adjuster) {
+    placeAdjusterMarker(ev.adjuster.latitude, ev.adjuster.longitude)
+  }
+
+  if (ev?.route?.polyline) {
+    drawRoute(ev.route)
+  } else if (!ev?.adjuster) {
+    // No active assignment — center on incident
     map.setView([inc.latitude, inc.longitude], 14)
   }
 }
 
-function drawPolyline(coords: [number, number][]) {
-  if (!map || coords.length < 2) return
-  if (routeLine) { map.removeLayer(routeLine); routeLine = null }
-  routeLine = L.polyline(coords, { color: '#f59e0b', weight: 4, opacity: 0.85 }).addTo(map)
-  const bounds = routeLine.getBounds()
-  if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] })
+/** Place or move the adjuster marker. Uses setLatLng on subsequent calls
+ *  to avoid flickering — Leaflet smoothly repositions the existing marker. */
+function placeAdjusterMarker(lat: number, lon: number) {
+  if (!map) return
+  if (adjusterMarker) {
+    adjusterMarker.setLatLng([lat, lon])
+  } else {
+    adjusterMarker = L.marker([lat, lon], { icon: adjIcon })
+      .bindTooltip('Ajustador').addTo(map)
+  }
+}
+
+/** Draw (or redraw) the route from a RouteInfo payload.
+ *  Uses buildRouteLayer so ant-path animation and traffic colours are applied. */
+function drawRoute(route: { polyline: string | null; distance_m: number | null; duration_s: number | null; traffic_segments: import('@slate/types').TrafficSegment[] | null }) {
+  if (!map || !route.polyline) return
+  if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+  const result = routeFromPayload(
+    route.polyline,
+    route.distance_m,
+    route.duration_s,
+    route.traffic_segments,
+  )
+  if (result.coords.length < 2) return
+  routeLayer = buildRouteLayer(L, result.coords, result.traffic_segments, 0)
+  routeLayer.addTo(map)
+  const bounds = (routeLayer as L.Polyline).getBounds?.()
+  if (bounds?.isValid()) map.fitBounds(bounds, { padding: [40, 40] })
 }
 
 onUnmounted(() => { map?.remove(); map = null })
@@ -149,12 +198,16 @@ onUnmounted(() => { map?.remove(); map = null })
 onMounted(async () => {
   const id = incidentId.value
   try {
-    const [inc, asgns] = await Promise.all([
+    const [inc, asgns, snapshot] = await Promise.all([
       incidentsApi.get(id),
       assignmentsApi.byIncident(id),
+      // .catch so a notifications service outage never blocks the main view
+      notificationsApi.incidentSnapshot(id).catch(() => [] as AssignmentEvent[]),
     ])
     incident.value = inc
     assignments.value = Array.isArray(asgns) ? asgns : []
+    // snapshot[0] is the most-recent active assignment (ordered by assigned_at desc)
+    snapshotEvent.value = snapshot[0] ?? null
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Error al cargar incidente'
   } finally {
