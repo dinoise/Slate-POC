@@ -46,6 +46,15 @@ async def get_demand_predictions(
         examples=["19.2,-99.4,19.6,-99.0"],
     ),
     limit: int = Query(MAX_LIMIT, ge=1, le=MAX_LIMIT),
+    min_pred_abs: float = Query(
+        0.0,
+        ge=0.0,
+        description=(
+            "Minimum demand threshold. Hexagons with pred_abs below this value are "
+            "excluded at the DB level. Clients should increase this at low zoom levels "
+            "to reduce response size."
+        ),
+    ),
 ) -> list[DemandPredictionRead]:
     """
     Get demand predictions for a time slot filtered by viewport bounding box.
@@ -72,5 +81,6 @@ async def get_demand_predictions(
         max_lat=max_lat,
         max_lon=max_lon,
         limit=limit,
+        min_pred_abs=min_pred_abs,
     )
     return [DemandPredictionRead.model_validate(p) for p in predictions]

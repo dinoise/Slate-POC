@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from geoalchemy2 import Geometry
-from sqlalchemy import DateTime, Float, Index, SmallInteger, String, UniqueConstraint, text
+from sqlalchemy import DateTime, Float, Index, SmallInteger, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -28,9 +28,10 @@ class DemandPrediction(Base):
             postgresql_using="gist",
         ),
         Index(
-            "idx_demand_predictions_slot",
-            "predicted_for",
-            text("pred_abs DESC"),
+            "idx_demand_predictions_slot_spatial",
+            "hora_num",
+            "dia_semana_num",
+            postgresql_include=["h3_r8", "pred_abs", "demand_level", "lat", "lon"],
         ),
         Index("idx_demand_predictions_h3", "h3_r8"),
     )

@@ -1,7 +1,5 @@
 """Pydantic schemas for DemandPrediction model."""
 
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -19,6 +17,3 @@ class DemandPredictionRead(BaseModel):
     demand_level: int = Field(..., ge=0, le=2)  # 0=Low 1=Med 2=High
     lat: float
     lon: float
-    model_version: str
-    predicted_for: datetime
-    created_at: datetime
