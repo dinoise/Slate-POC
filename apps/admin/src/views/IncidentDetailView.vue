@@ -22,9 +22,6 @@ const incidentId = computed(() => Number(route.params.id))
 
 const incident = ref<Incident | null>(null)
 const assignments = ref<Assignment[]>([])
-const activeAssignment = computed(() =>
-  assignments.value.find((a) => !['cancelled', 'completed'].includes(a.status)) ?? null,
-)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const cancelling = ref(false)
