@@ -15,6 +15,8 @@ from .core.provider_registry import init_provider
 from .routes import (
     adjuster_positions_router,
     adjusters_router,
+    agents_router,
+    assignment_notes_router,
     assignments_router,
     demand_predictions_router,
     incidents_router,
@@ -116,7 +118,9 @@ _auth = [Depends(verify_google_token)]
 # Register routers
 app.include_router(incidents_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
 app.include_router(adjusters_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(agents_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
 app.include_router(assignments_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(assignment_notes_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
 app.include_router(demand_predictions_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
 app.include_router(adjuster_positions_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
 app.include_router(recommendations_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)

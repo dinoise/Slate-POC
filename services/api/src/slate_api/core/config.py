@@ -61,10 +61,20 @@ class Settings(BaseAppSettings):
     # Google Routes API
     GOOGLE_ROUTES_API_KEY: str = ""
 
+    # Vertex AI / Agent Engine
+    VERTEX_PROJECT: str = ""
+    VERTEX_LOCATION: str = "us-central1"
+    AGENT_ENGINE_ID: str = ""
+
     @computed_field  # type: ignore[misc]
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def agent_engine_configured(self) -> bool:
+        return bool(self.VERTEX_PROJECT and self.AGENT_ENGINE_ID)
 
 
 @lru_cache
