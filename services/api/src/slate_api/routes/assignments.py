@@ -15,7 +15,9 @@ from ..schemas.assignment import (
     OptimizeResponse,
     RouteResponse,
 )
+from ..schemas.assignment_metrics import AssignmentMetrics
 from ..schemas.pagination import PaginatedResponse
+from ..services.assignment_metrics_service import AssignmentMetricsService
 from ..services.assignment_service import AssignmentService
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
@@ -27,6 +29,35 @@ def get_assignment_service(db: DBSession) -> AssignmentService:
 
 
 AssignmentServiceDep = Annotated[AssignmentService, Depends(get_assignment_service)]
+
+
+def get_metrics_service(db: DBSession) -> AssignmentMetricsService:
+    return AssignmentMetricsService(db)
+
+
+MetricsServiceDep = Annotated[AssignmentMetricsService, Depends(get_metrics_service)]
+
+
+@router.get(
+    "/metrics",
+    response_model=AssignmentMetrics,
+    summary="Aggregated assignment metrics for the analytics AI agent",
+)
+async def get_assignment_metrics(
+    service: MetricsServiceDep,
+    window_hours: int = Query(
+        8, ge=1, le=168, description="Hours to look back for volume/resolution stats"
+    ),
+) -> AssignmentMetrics:
+    """
+    Return aggregated assignment metrics.
+
+    Used by the analytics sub-agent to answer questions like:
+    - How many assignments are active right now and in what state?
+    - What's the average resolution time in the last shift?
+    - How many incidents were created vs resolved in the last N hours?
+    """
+    return await service.get_metrics(window_hours=window_hours)
 
 
 @router.post(
