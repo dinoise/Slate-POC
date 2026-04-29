@@ -11,6 +11,7 @@ from .base import BaseModel
 if TYPE_CHECKING:
     from .adjuster import Adjuster
     from .assignment_event import AssignmentEvent
+    from .assignment_note import AssignmentNote
     from .assignment_status_history import AssignmentStatusHistory
     from .incident import Incident
 
@@ -94,6 +95,12 @@ class Assignment(BaseModel):
         "AssignmentEvent",
         back_populates="assignment",
         order_by="AssignmentEvent.created_at",
+        cascade="all, delete-orphan",
+    )
+    agent_notes: Mapped[list["AssignmentNote"]] = relationship(
+        "AssignmentNote",
+        back_populates="assignment",
+        order_by="AssignmentNote.created_at",
         cascade="all, delete-orphan",
     )
 

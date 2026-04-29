@@ -4,6 +4,7 @@ from .adjuster import Adjuster
 from .adjuster_position import AdjusterPosition
 from .assignment import Assignment
 from .assignment_event import AssignmentEvent
+from .assignment_note import AssignmentNote
 from .assignment_status_history import AssignmentStatusHistory
 from .base import Base, BaseModel, TimestampMixin
 from .demand_prediction import DemandPrediction
@@ -18,6 +19,7 @@ __all__ = [
     "AdjusterPosition",
     "Assignment",
     "AssignmentEvent",
+    "AssignmentNote",
     "AssignmentStatusHistory",
     "DemandPrediction",
     "Incident",
