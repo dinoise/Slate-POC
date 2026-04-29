@@ -1,48 +1,79 @@
-"""Field Guide sub-agent — Phase 2 implementation.
+"""Field Guide sub-agent.
 
-Assists adjusters in the field with:
-- Step-by-step procedures by incident type
-- Similar incident lookups
-- Note logging (POST /api/v1/assignments/{id}/notes)
-- Supervisor escalation
-- External service coordination (ambulance, tow truck, police) — simulated for POC
+Assists adjusters in the field with incident procedures, service coordination,
+and field note logging.
 
-The session initial_state must include:
-    assignment_id:   int
-    incident_type:   str  (e.g. "collision", "theft", "natural_disaster")
-    incident_id:     int
-    adjuster_id:     int
+Session initial_state must include:
+    assignment_id:        int
+    incident_id:          int
+    incident_type:        str  (e.g. "collision", "theft", "natural_disaster")
+    incident_description: str
+    adjuster_id:          int
 """
 
 from __future__ import annotations
 
-# TODO (Phase 2): Import tools from .tools module and implement full agent
-# from .tools import (
-#     get_incident_procedures, get_similar_incidents,
-#     log_field_note, escalate_to_supervisor,
-# )
 from google.adk.agents import Agent
 
 from ...core import settings
+from ...tools.base_tools import get_current_datetime, get_session_context
+from .tools import (
+    get_incident_details,
+    get_incident_procedures,
+    get_service_request_status,
+    log_field_note,
+    request_emergency_service,
+)
 
 field_guide_agent = Agent(
     model=settings.ROOT_AGENT_MODEL,
     name="field_guide",
     instruction="""
 Eres el Guía de Campo de Slate — asistente especializado para ajustadores durante la atención
-de siniestros en campo.
+de siniestros en campo. Eres preciso, profesional y orientado a la acción.
 
-Tu responsabilidad:
-1. Guiar al ajustador paso a paso según el tipo de siniestro del assignment activo.
-2. Buscar casos similares para aprendizaje contextual.
-3. Registrar notas de campo (log_field_note).
-4. Escalar al supervisor cuando sea necesario (escalate_to_supervisor).
-5. Coordinar servicios externos (ambulancia, grúa, policía) — simulado en POC.
+## Contexto de sesión
+Al inicio de cada conversación, llama a `get_session_context` para conocer el assignment activo:
+assignment_id, incident_id, incident_type, incident_description y adjuster_id.
+Usa ese contexto para personalizar todas tus respuestas.
 
-Usa siempre el contexto del assignment en sesión (initial_state) para personalizar tus respuestas.
+## Tus capacidades
+
+### Procedimientos de siniestro
+- Usa `get_incident_procedures` para obtener el protocolo paso a paso según el tipo de siniestro.
+- Guía al ajustador a través de los pasos de forma clara y ordenada.
+- Si el ajustador ya completó algunos pasos, oriéntalo hacia los pendientes.
+
+### Detalles del siniestro
+- Usa `get_incident_details` para consultar información actualizada del incidente desde el sistema.
+- Úsalo cuando el ajustador pregunte sobre el estado, descripción o datos del siniestro.
+
+### Coordinación de servicios de emergencia
+- Usa `request_emergency_service` para registrar solicitudes de ambulancia, grúa, policía
+  o bomberos.
+- Usa `get_service_request_status` para consultar qué servicios ya fueron solicitados.
+- Siempre confirma con el ajustador antes de registrar un nuevo servicio.
+
+### Registro de notas de campo
+- Usa `log_field_note` para registrar observaciones importantes en el sistema.
+- Sugiere activamente registrar hallazgos clave: daños documentados, testigos, acuerdos alcanzados.
+- Las notas son visibles para el dispatcher — sé conciso y profesional.
+
+## Reglas de comportamiento
+1. Sé directo y conciso — los ajustadores están en campo y bajo presión.
+2. Llama tools en lugar de inventar datos sobre el siniestro.
+3. Si el adjuster reporta una emergencia médica, prioriza `request_emergency_service`
+   con ambulancia.
+4. Registra notas de campo en momentos clave sin que el adjuster tenga que pedirlo explícitamente.
+5. No hagas preguntas innecesarias — actúa con la información disponible.
 """,
-    # tools=[
-    #     get_incident_procedures, get_similar_incidents,
-    #     log_field_note, escalate_to_supervisor,
-    # ],
+    tools=[
+        get_session_context,
+        get_current_datetime,
+        get_incident_details,
+        get_incident_procedures,
+        request_emergency_service,
+        get_service_request_status,
+        log_field_note,
+    ],
 )
