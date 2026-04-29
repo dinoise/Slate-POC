@@ -50,7 +50,7 @@ const items = [
   <aside class="app-sidebar">
     <div class="sidebar-header">
       <span class="pi pi-compass sidebar-logo" />
-      <span class="sidebar-title">Despacho</span>
+      <span class="sidebar-title">Slate POC</span>
     </div>
 
     <Menu :model="items" class="sidebar-menu">

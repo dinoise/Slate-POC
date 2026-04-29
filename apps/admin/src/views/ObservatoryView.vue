@@ -39,6 +39,20 @@ const router = useRouter()
 // Last known viewport bbox — updated by map moveend/zoomend via onViewportChange.
 // Fallback is CDMX until the map has loaded and emitted its first viewport event.
 const currentBbox = ref('19.2,-99.4,19.6,-99.0')
+const currentZoom = ref(10)
+
+/**
+ * Maps zoom level to a minimum pred_abs threshold sent to the backend.
+ * At low zoom (wide viewport) we exclude low-demand hexagons to reduce
+ * the number of rows PostgreSQL serializes and sends over the wire.
+ * At high zoom (street level) threshold is 0 so all hexagons are visible.
+ */
+function _thresholdForZoom(zoom: number): number {
+  if (zoom >= 13) return 0      // street level — show everything
+  if (zoom >= 11) return 0.3    // neighbourhood
+  if (zoom >= 9)  return 0.8    // district
+  return 1.5                     // city / regional view
+}
 
 // ── Slot selector ─────────────────────────────────────────────────────────────
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
@@ -68,7 +82,9 @@ const loadingDemand = ref(false)
 const demandCache = new Map<string, DemandPrediction[]>()
 
 /** Ensure the bbox has at least 0.1° spread so the API never receives a
- *  collapsed box (minLat==maxLat) when zoomed in too far. */
+ *  collapsed box when zoomed in too far. The composable already snaps to
+ *  1 decimal before emitting, so do NOT re-round here — that would collapse
+ *  the box again (e.g. -111.05 → -111.1 === -111.0 after toFixed(1)). */
 function _expandBbox(bbox: string): string {
   const [minLat, minLon, maxLat, maxLon] = bbox.split(',').map(Number) as [number, number, number, number]
   const MIN_SPREAD = 0.1
@@ -78,19 +94,19 @@ function _expandBbox(bbox: string): string {
   const latMid = (minLat + maxLat) / 2
   const lonMid = (minLon + maxLon) / 2
   const half = MIN_SPREAD / 2
-  return [
-    (latMid - half).toFixed(1),
-    (lonMid - half).toFixed(1),
-    (latMid + half).toFixed(1),
-    (lonMid + half).toFixed(1),
-  ].join(',')
+  const eMinLat = latSpread < MIN_SPREAD ? latMid - half : minLat
+  const eMaxLat = latSpread < MIN_SPREAD ? latMid + half : maxLat
+  const eMinLon = lonSpread < MIN_SPREAD ? lonMid - half : minLon
+  const eMaxLon = lonSpread < MIN_SPREAD ? lonMid + half : maxLon
+  return [eMinLat, eMinLon, eMaxLat, eMaxLon].join(',')
 }
 
 async function fetchDemand(bbox: string) {
   if (!layerVisibility.value.demand) return
 
-  const safeBbox = _expandBbox(bbox)
-  const key = `${selectedHour.value}_${selectedDay.value}_${safeBbox}`
+  const safeBbox    = _expandBbox(bbox)
+  const threshold   = _thresholdForZoom(currentZoom.value)
+  const key = `${selectedHour.value}_${selectedDay.value}_${safeBbox}_${threshold}`
   if (demandCache.has(key)) {
     const cached = demandCache.get(key)!
     demandPredictions.value = cached
@@ -103,6 +119,7 @@ async function fetchDemand(bbox: string) {
       dia_semana_num: selectedDay.value,
       hora_num:       selectedHour.value,
       bbox:           safeBbox,
+      min_pred_abs:   threshold,
     })
     const data = Array.isArray(res) ? res : []
     demandCache.set(key, data)
@@ -120,8 +137,9 @@ watch([selectedDay, selectedHour], () => fetchDemand(currentBbox.value))
 
 // Debounced viewport handler — registered once after map init via onViewportChange
 let _viewportDebounce: ReturnType<typeof setTimeout> | null = null
-onViewportChange((bbox) => {
+onViewportChange((bbox, zoom) => {
   currentBbox.value = bbox
+  currentZoom.value = zoom
   if (_viewportDebounce) clearTimeout(_viewportDebounce)
   _viewportDebounce = setTimeout(() => fetchDemand(bbox), 350)
 })
