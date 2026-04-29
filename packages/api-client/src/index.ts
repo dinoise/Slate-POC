@@ -141,11 +141,12 @@ export const adjusterPositionsApi = {
 export const demandApi = {
   slots: () =>
     apiFetch<DemandSlot[]>('/api/v1/demand-predictions/available-slots'),
-  bySlot: (params: { hora_num: number; dia_semana_num: number; bbox: string }) => {
+  bySlot: (params: { hora_num: number; dia_semana_num: number; bbox: string; min_pred_abs?: number }) => {
     const qs = new URLSearchParams({
       hora_num: String(params.hora_num),
       dia_semana_num: String(params.dia_semana_num),
       bbox: params.bbox,
+      ...(params.min_pred_abs ? { min_pred_abs: String(params.min_pred_abs) } : {}),
     }).toString()
     return apiFetch<DemandPrediction[]>(`/api/v1/demand-predictions?${qs}`)
   },

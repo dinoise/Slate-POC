@@ -131,9 +131,6 @@ export interface DemandPrediction {
   pred_ratio: number
   pred_abs: number
   demand_level: number  // 0=Low, 1=Med, 2=High
-  model_version: string
-  predicted_for: string
-  created_at: string
 }
 
 export interface DemandSlot {

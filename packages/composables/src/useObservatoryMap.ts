@@ -76,8 +76,8 @@ export interface UseObservatoryMapReturn {
   ) => Promise<void>
   clearRecommendationsLayer: () => void
   toggleLayer:              (name: LayerName, visible: boolean) => void
-  /** Register a callback fired on moveend/zoomend with the snapped bbox string. */
-  onViewportChange:         (cb: (bbox: string) => void) => void
+  /** Register a callback fired on moveend/zoomend with the snapped bbox and current zoom level. */
+  onViewportChange:         (cb: (bbox: string, zoom: number) => void) => void
   destroy:                  () => void
 }
 
@@ -134,7 +134,7 @@ export function useObservatoryMap(
   let initPromise: Promise<void> | null = null
 
   // Viewport change callback — set via onViewportChange()
-  let _viewportCallback: ((bbox: string) => void) | null = null
+  let _viewportCallback: ((bbox: string, zoom: number) => void) | null = null
 
   /** Snap coordinate to 1 decimal (~11km grid) to maximise cache hits. */
   function _snap(n: number): number { return Math.round(n * 10) / 10 }
@@ -221,8 +221,11 @@ export function useObservatoryMap(
       mapInstance.addControl(deckOverlay)
 
       // Notify caller on pan/zoom end — use snapped bbox to maximise cache hits
-      mapInstance.on('moveend', () => { if (_viewportCallback) _viewportCallback(_currentBbox()) })
-      mapInstance.on('zoomend', () => { if (_viewportCallback) _viewportCallback(_currentBbox()) })
+      const _fireViewport = () => {
+        if (_viewportCallback) _viewportCallback(_currentBbox(), mapInstance.getZoom())
+      }
+      mapInstance.on('moveend', _fireViewport)
+      mapInstance.on('zoomend', _fireViewport)
 
       // Render once the base map tiles have loaded.
       // If 'load' already fired (style cached), mapInstance.loaded() is true.
@@ -674,7 +677,7 @@ export function useObservatoryMap(
     _render()
   }
 
-  function onViewportChange(cb: (bbox: string) => void) {
+  function onViewportChange(cb: (bbox: string, zoom: number) => void) {
     _viewportCallback = cb
   }
 
