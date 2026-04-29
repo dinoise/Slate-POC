@@ -537,6 +537,27 @@ const STATUS_LABEL: Record<string, string> = {
               </div>
             </template>
 
+            <!-- ── Demand hexagon tooltip ─────────────────────────── -->
+            <template v-else-if="hoveredTooltip.type === 'demand_hex'">
+              <div class="mtt-status-row">
+                <span
+                  class="mtt-dot"
+                  :class="`mtt-dot--demand-${hoveredTooltip.prediction.demand_level}`"
+                />
+                <span class="mtt-status">Zona de demanda</span>
+              </div>
+              <div class="mtt-type">
+                <span
+                  class="mtt-badge"
+                  :class="`mtt-badge--demand-${hoveredTooltip.prediction.demand_level}`"
+                >{{ DEMAND_LABEL[hoveredTooltip.prediction.demand_level] ?? hoveredTooltip.prediction.demand_level }}</span>
+              </div>
+              <div class="mtt-meta">
+                <span>{{ hoveredTooltip.prediction.pred_abs.toFixed(2) }} sin/hr</span>
+              </div>
+              <div class="mtt-address mtt-address--coords">{{ hoveredTooltip.prediction.h3_r8 }}</div>
+            </template>
+
             <div class="mtt-hint">Clic para ver detalle</div>
           </div>
         </Transition>
@@ -989,6 +1010,9 @@ const STATUS_LABEL: Record<string, string> = {
 .mtt-dot--completed    { background: #6b7280; }
 .mtt-dot--cancelled    { background: #ef4444; }
 .mtt-dot--free         { background: #9ca3af; }
+.mtt-dot--demand-0     { background: #3b82f6; }   /* blue-500  — low    */
+.mtt-dot--demand-1     { background: #f97316; }   /* orange-500 — medium */
+.mtt-dot--demand-2     { background: #dc2626; }   /* red-600   — high   */
 
 .mtt-status {
   font-size: 0.78rem;
@@ -1023,6 +1047,19 @@ const STATUS_LABEL: Record<string, string> = {
 .mtt-badge--free {
   background: rgba(156, 163, 175, 0.2);
   color: #d1d5db;
+}
+
+.mtt-badge--demand-0 {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+.mtt-badge--demand-1 {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fdba74;
+}
+.mtt-badge--demand-2 {
+  background: rgba(220, 38, 38, 0.2);
+  color: #fca5a5;
 }
 
 .mtt-address--coords {

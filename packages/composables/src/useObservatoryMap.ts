@@ -54,8 +54,9 @@ const INITIAL_VIEW = { longitude: -99.13, latitude: 19.43, zoom: 10 }
 /** Tooltip data exposed to the parent component for overlay rendering.
  *  Discriminated union so the view renders the correct content per marker type. */
 export type MapTooltip =
-  | { type: 'assignment';   x: number; y: number; event: AssignmentEvent }
+  | { type: 'assignment';    x: number; y: number; event: AssignmentEvent }
   | { type: 'free_adjuster'; x: number; y: number; adjuster: FreeAdjuster }
+  | { type: 'demand_hex';    x: number; y: number; prediction: DemandPrediction }
 
 export interface UseObservatoryMapReturn {
   clickedFeature:  Ref<ObservatoryClickedFeature | null>
@@ -112,6 +113,9 @@ export function useObservatoryMap(
 
   // Currently hovered free adjuster id — drives highlight on the free-adjusters layer.
   let hoveredFreeAdjId: number | null = null
+
+  // Currently hovered H3 hex index — drives highlight on the demand layer.
+  let hoveredHexH3Index: string | null = null
 
   // Deck.gl / MapLibre instances — created once on first setter call
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -235,14 +239,37 @@ export function useObservatoryMap(
 
   function _demandLayer() {
     if (!layerVisibility.value.demand || !H3HexagonLayer) return null
+
+    const hid = hoveredHexH3Index
+
     return new H3HexagonLayer({
       id: 'demand',
       data: demandData,
-      getHexagon:   (d: DemandPrediction) => d.h3_r8,
-      getFillColor: (d: DemandPrediction) => DEMAND_COLOURS[d.demand_level] ?? FALLBACK_COLOUR,
+      getHexagon: (d: DemandPrediction) => d.h3_r8,
+      updateTriggers: { getFillColor: hid },
+      getFillColor: (d: DemandPrediction) => {
+        const base = DEMAND_COLOURS[d.demand_level] ?? FALLBACK_COLOUR
+        if (hid === null) return base
+        // Hovered hex: full opacity. All others: dimmed.
+        return d.h3_r8 === hid
+          ? ([base[0], base[1], base[2], 255] as [number, number, number, number])
+          : ([base[0], base[1], base[2],  80] as [number, number, number, number])
+      },
       getElevation: 0,
       extruded:     false,
       pickable:     true,
+      onHover: ({ object, x, y }: { object: DemandPrediction | null; x: number; y: number }) => {
+        if (mapInstance) {
+          mapInstance.getCanvas().style.cursor = object ? 'pointer' : ''
+        }
+        const newId = object?.h3_r8 ?? null
+        if (newId === hoveredHexH3Index) return   // no change — skip re-render
+        hoveredHexH3Index = newId
+        hoveredTooltip.value = object
+          ? { type: 'demand_hex', x, y, prediction: object }
+          : null
+        _render()
+      },
       onClick: ({ object }: { object: DemandPrediction | null }) => {
         if (!object) return
         clickedFeature.value = {
