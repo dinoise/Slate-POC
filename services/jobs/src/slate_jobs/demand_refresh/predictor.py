@@ -27,6 +27,29 @@ from ..config import settings
 
 logger = get_logger(__name__)
 
+
+def _classify_demand(pred_abs_array: np.ndarray) -> np.ndarray:
+    """Classify hexagons into demand levels using per-slot percentile thresholds.
+
+    Levels:
+        0 — Low    (pred_abs < p50)
+        1 — Medium (p50 ≤ pred_abs < p85)
+        2 — High   (pred_abs ≥ p85)
+
+    Using per-slot percentiles (rather than global fixed thresholds) ensures
+    the distribution of levels is meaningful regardless of hour or day — roughly
+    50% Low, 35% Medium, 15% High every slot.
+    """
+    if len(pred_abs_array) == 0:
+        return np.array([], dtype=int)
+    p50 = float(np.percentile(pred_abs_array, 50))
+    p85 = float(np.percentile(pred_abs_array, 85))
+    levels = np.zeros(len(pred_abs_array), dtype=int)
+    levels[pred_abs_array >= p50] = 1
+    levels[pred_abs_array >= p85] = 2
+    return levels
+
+
 FEATURE_COLS = [
     "hora_num",
     "dia_semana_num",
@@ -134,13 +157,22 @@ class DemandPredictor:
             self._threshold,
         )
 
+        # Classify demand using per-slot percentile thresholds over active hexagons only.
+        # This produces a meaningful relative distribution (~50% Low, ~35% Med, ~15% High)
+        # regardless of the hour or day — global thresholds would be meaningless given the
+        # log-normal distribution of pred_abs (p95 varies from ~2.0 at 3am to ~10.7 at 14h).
+        active_pred_abs = pred_abs[active_mask]
+        demand_levels = _classify_demand(active_pred_abs)
+
         results: list[SlotPrediction] = []
+        active_idx = 0
         for i, row in enumerate(slot.itertuples()):
             if not active_mask[i]:
                 continue
             lat = getattr(row, "lat", None)
             lon = getattr(row, "lon", None)
             if lat is None or pd.isna(lat):
+                active_idx += 1
                 continue
             results.append(
                 SlotPrediction(
@@ -149,11 +181,12 @@ class DemandPredictor:
                     dia_semana_num=int(row.dia_semana_num),
                     pred_ratio=float(pred_ratio[i]),
                     pred_abs=float(pred_abs[i]),
-                    demand_level=int(row.demand_level_num),
+                    demand_level=int(demand_levels[active_idx]),
                     lat=float(lat),
                     lon=float(lon),
                     model_version=self._version,
                     predicted_for=predicted_for,
                 )
             )
+            active_idx += 1
         return results

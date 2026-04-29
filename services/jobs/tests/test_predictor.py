@@ -12,7 +12,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from slate_jobs.demand_refresh.predictor import FEATURE_COLS, DemandPredictor, SlotPrediction
+from slate_jobs.demand_refresh.predictor import (
+    FEATURE_COLS,
+    DemandPredictor,
+    SlotPrediction,
+    _classify_demand,
+)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -138,6 +143,72 @@ def test_slot_prediction_fields(predictor: DemandPredictor) -> None:
     assert r.demand_level in (0, 1, 2)
     assert -180 <= r.lon <= 180
     assert -90 <= r.lat <= 90
+
+
+# ── _classify_demand unit tests ───────────────────────────────────────────────
+
+
+def test_classify_demand_empty() -> None:
+    result = _classify_demand(np.array([]))
+    assert len(result) == 0
+
+
+def test_classify_demand_levels_in_range() -> None:
+    rng = np.random.default_rng(7)
+    values = rng.uniform(0.1, 10.0, 100)
+    levels = _classify_demand(values)
+    assert set(levels).issubset({0, 1, 2})
+
+
+def test_classify_demand_percentile_invariant() -> None:
+    """Per-slot percentile classification should produce ~50% Low, ~35% Med, ~15% High."""
+    rng = np.random.default_rng(99)
+    # Use 200 values so percentile counts are stable
+    values = rng.lognormal(mean=1.0, sigma=0.8, size=200)
+    levels = _classify_demand(values)
+    n = len(levels)
+    pct_low = (levels == 0).sum() / n
+    pct_high = (levels == 2).sum() / n
+    # By construction: p50 threshold → ~50% Low; p85 threshold → ~15% High
+    assert 0.45 <= pct_low <= 0.55, f"Expected ~50% Low, got {pct_low:.1%}"
+    assert 0.10 <= pct_high <= 0.20, f"Expected ~15% High, got {pct_high:.1%}"
+
+
+def test_classify_demand_single_value() -> None:
+    """Single value always gets level 2 (it's both p50 and p85)."""
+    levels = _classify_demand(np.array([5.0]))
+    assert levels[0] == 2
+
+
+def test_demand_level_not_from_training_feature(predictor: DemandPredictor) -> None:
+    """demand_level must be derived from pred_abs — not copied from demand_level_num feature.
+
+    We verify by checking that the distribution across a full slot roughly
+    matches the expected per-slot percentile split, not an arbitrary training-time label.
+    """
+    predicted_for = datetime(2026, 4, 22, 8, 0, tzinfo=UTC)
+    results = predictor.predict_slot(hora=8, dia_semana=2, predicted_for=predicted_for)
+    if len(results) < 3:
+        pytest.skip("Too few active hexagons to verify distribution")
+    pred_abs_vals = np.array([r.pred_abs for r in results])
+    demand_levels = np.array([r.demand_level for r in results])
+    # Verify: rows with pred_abs >= p85 should all be level 2
+    p85 = float(np.percentile(pred_abs_vals, 85))
+    for r in results:
+        if r.pred_abs >= p85:
+            assert r.demand_level == 2, (
+                f"Expected demand_level=2 for pred_abs={r.pred_abs:.3f} >= p85={p85:.3f}, "
+                f"got {r.demand_level}"
+            )
+    # Verify: rows with pred_abs < p50 should all be level 0
+    p50 = float(np.percentile(pred_abs_vals, 50))
+    for r in results:
+        if r.pred_abs < p50:
+            assert r.demand_level == 0, (
+                f"Expected demand_level=0 for pred_abs={r.pred_abs:.3f} < p50={p50:.3f}, "
+                f"got {r.demand_level}"
+            )
+    _ = demand_levels  # suppress unused warning
 
 
 def test_predict_slot_unknown_hora_returns_empty(predictor: DemandPredictor) -> None:
