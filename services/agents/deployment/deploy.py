@@ -55,9 +55,35 @@ def validate() -> bool:
     return True
 
 
+def _service_root() -> str:
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _build_wheel() -> str:
+    """Build a wheel for slate-agents and return the path to the .whl file."""
+    import glob
+    import subprocess
+
+    service_root = _service_root()
+    dist_dir = os.path.join(service_root, "dist")
+    logger.info("Building slate-agents wheel in %s", service_root)
+    subprocess.run(
+        [sys.executable, "-m", "build", "--wheel", "--outdir", dist_dir],
+        cwd=service_root,
+        check=True,
+        capture_output=True,
+    )
+    wheels = glob.glob(os.path.join(dist_dir, "slate_agents-*.whl"))
+    if not wheels:
+        raise RuntimeError(f"No wheel found in {dist_dir} after build")
+    wheel = sorted(wheels)[-1]
+    logger.info("Built wheel: %s", wheel)
+    return wheel
+
+
 def _build_adk_app():  # type: ignore[return]
     """Wrap the App object in AdkApp for Agent Engine deployment."""
-    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
+    src_dir = os.path.join(_service_root(), "src")
     if src_dir not in sys.path:
         sys.path.insert(0, src_dir)
 
@@ -89,9 +115,9 @@ def create_agent() -> str:
     staging_bucket = os.environ["STAGING_BUCKET"]
     vertexai.init(project=project, location=location, staging_bucket=staging_bucket)
 
+    wheel = _build_wheel()
     adk_app = _build_adk_app()
 
-    # Verify the AdkApp is pickleable before attempting remote deployment.
     pickle_size = len(cloudpickle.dumps(adk_app))
     logger.info("AdkApp pickle size: %d bytes (staging_bucket=%s)", pickle_size, staging_bucket)
 
@@ -101,6 +127,7 @@ def create_agent() -> str:
     remote = agent_engines.create(
         agent_engine=adk_app,
         requirements=REQUIREMENTS,
+        extra_packages=[wheel],
         display_name=display_name,
         env_vars=_env_vars(),
     )
@@ -126,9 +153,9 @@ def update_agent(resource_id: str) -> str:
         else resource_id
     )
 
+    wheel = _build_wheel()
     adk_app = _build_adk_app()
 
-    # Verify the AdkApp is pickleable before attempting remote deployment.
     pickle_size = len(cloudpickle.dumps(adk_app))
     logger.info("AdkApp pickle size: %d bytes (staging_bucket=%s)", pickle_size, staging_bucket)
 
@@ -139,6 +166,7 @@ def update_agent(resource_id: str) -> str:
         resource_name=resource_name,
         agent_engine=adk_app,
         requirements=REQUIREMENTS,
+        extra_packages=[wheel],
         display_name=display_name,
         env_vars=_env_vars(),
     )

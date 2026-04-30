@@ -26,6 +26,8 @@ dev = [
     "pytest-asyncio>=0.26",
     "pytest-cov>=6.0",
     "ruff>=0.9",
+    "build>=1.0",       # wheel builder used by deployment/deploy.py
+    "cloudpickle>=3.0", # pre-deploy pickle validation
 ]
 
 [build-system]
