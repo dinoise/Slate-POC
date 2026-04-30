@@ -45,11 +45,33 @@ _RUNTIME_VAR_NAMES = [
     "SLATE_API_URL",
 ]
 
-# Pass the src/ directory so Agent Engine places it at /code/src/ and
-# slate_agents is importable as /code/src/slate_agents/__init__.py.
-# Passing "./src/slate_agents" would place the package at /code/slate_agents/
-# but Agent Engine adds /code/ to sys.path, not /code/slate_agents/.
-_EXTRA_PACKAGES = ["./src"]
+
+def _build_wheel() -> str:
+    """Build a wheel and return its absolute path.
+
+    Uses `uv build` which is always available in CI (we install uv in the
+    workflow). The wheel is installed into site-packages in the container,
+    making slate_agents importable regardless of sys.path — unlike passing
+    a directory which Agent Engine does NOT add to sys.path automatically.
+    """
+    import glob
+    import subprocess
+
+    service_root = _service_root()
+    dist_dir = os.path.join(service_root, "dist")
+    logger.info("Building wheel with uv build...")
+    result = subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", dist_dir],
+        cwd=service_root,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"uv build failed with exit code {result.returncode}")
+    wheels = glob.glob(os.path.join(dist_dir, "slate_agents-*.whl"))
+    if not wheels:
+        raise RuntimeError(f"No wheel found in {dist_dir}")
+    wheel = sorted(wheels)[-1]
+    logger.info("Built wheel: %s", wheel)
+    return wheel
 
 
 def validate() -> bool:
@@ -97,6 +119,7 @@ def _init_client():  # type: ignore[return]
 
 def create_agent() -> str:
     staging_bucket = os.environ["STAGING_BUCKET"]
+    wheel = _build_wheel()
     client = _init_client()
     adk_app = _build_adk_app()
     display_name = _versioned_name("slate-agents-dev")
@@ -108,7 +131,7 @@ def create_agent() -> str:
             "staging_bucket": staging_bucket,
             "display_name": display_name,
             "requirements": REQUIREMENTS,
-            "extra_packages": _EXTRA_PACKAGES,
+            "extra_packages": [wheel],
             "env_vars": _env_vars(),
         },
     )
@@ -128,6 +151,7 @@ def update_agent(resource_id: str) -> str:
         else resource_id
     )
 
+    wheel = _build_wheel()
     client = _init_client()
     adk_app = _build_adk_app()
     display_name = _versioned_name("slate-agents-dev")
@@ -140,7 +164,7 @@ def update_agent(resource_id: str) -> str:
             "staging_bucket": staging_bucket,
             "display_name": display_name,
             "requirements": REQUIREMENTS,
-            "extra_packages": _EXTRA_PACKAGES,
+            "extra_packages": [wheel],
             "env_vars": _env_vars(),
         },
     )
