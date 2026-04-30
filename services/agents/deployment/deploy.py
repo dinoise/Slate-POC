@@ -45,8 +45,11 @@ _RUNTIME_VAR_NAMES = [
     "SLATE_API_URL",
 ]
 
-# Relative path from services/agents/ (the working directory when running deploy.py)
-_EXTRA_PACKAGES = ["./src/slate_agents"]
+# Pass the src/ directory so Agent Engine places it at /code/src/ and
+# slate_agents is importable as /code/src/slate_agents/__init__.py.
+# Passing "./src/slate_agents" would place the package at /code/slate_agents/
+# but Agent Engine adds /code/ to sys.path, not /code/slate_agents/.
+_EXTRA_PACKAGES = ["./src"]
 
 
 def validate() -> bool:
