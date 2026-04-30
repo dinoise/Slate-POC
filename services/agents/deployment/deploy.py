@@ -1,8 +1,9 @@
 """Deployment script for slate-agents on Vertex AI Agent Engine.
 
-Uses the Vertex AI Python SDK directly (vertexai.agent_engines) instead of
-`adk deploy agent_engine` CLI, which has a bug in 1.31.x where deploymentSpec
-is serialized empty causing 500 INTERNAL from the Vertex AI API.
+Uses vertexai.Client (new client-based API) instead of agent_engines module
+functions. The Client API correctly handles extra_packages with relative paths.
+
+Must be run from services/agents/ directory (default in CI via working-directory).
 
 Usage:
     python deployment/deploy.py --validate
@@ -35,6 +36,7 @@ REQUIREMENTS: list[str] = [
     "google-adk>=1.31.1",
     "pydantic-settings>=2.0.0",
     "httpx>=0.27.0",
+    "google-auth>=2.36.0",
 ]
 
 _RUNTIME_VAR_NAMES = [
@@ -43,10 +45,11 @@ _RUNTIME_VAR_NAMES = [
     "SLATE_API_URL",
 ]
 
+# Relative path from services/agents/ (the working directory when running deploy.py)
+_EXTRA_PACKAGES = ["./src/slate_agents"]
+
 
 def validate() -> bool:
-    """Check that all required environment variables are set."""
-    logger.info("Validating environment variables...")
     missing = [v for v in REQUIRED_ENV_VARS if not os.getenv(v)]
     if missing:
         logger.error("Missing required environment variables: %s", ", ".join(missing))
@@ -59,18 +62,7 @@ def _service_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _package_dir() -> str:
-    """Return the path to the slate_agents source directory.
-
-    Agent Engine copies this directory into the container before unpickling,
-    so the module is importable at deserialization time — unlike a wheel, which
-    is installed after the pickle load and causes ModuleNotFoundError.
-    """
-    return os.path.join(_service_root(), "src", "slate_agents")
-
-
 def _build_adk_app():  # type: ignore[return]
-    """Wrap the App object in AdkApp for Agent Engine deployment."""
     src_dir = os.path.join(_service_root(), "src")
     if src_dir not in sys.path:
         sys.path.insert(0, src_dir)
@@ -92,47 +84,40 @@ def _versioned_name(base: str) -> str:
     return f"{base}-v{version}-{git_sha}"
 
 
-def create_agent() -> str:
-    """Create a new Agent Engine instance. Prints the numeric ID to stdout."""
-    import cloudpickle  # type: ignore[import-untyped]
+def _init_client():  # type: ignore[return]
     import vertexai  # type: ignore[import-untyped]
-    from vertexai import agent_engines  # type: ignore[import-untyped]
 
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     location = os.environ["GOOGLE_CLOUD_LOCATION"]
+    return vertexai.Client(project=project, location=location)
+
+
+def create_agent() -> str:
     staging_bucket = os.environ["STAGING_BUCKET"]
-    vertexai.init(project=project, location=location, staging_bucket=staging_bucket)
-
+    client = _init_client()
     adk_app = _build_adk_app()
-
-    pickle_size = len(cloudpickle.dumps(adk_app))
-    logger.info("AdkApp pickle size: %d bytes (staging_bucket=%s)", pickle_size, staging_bucket)
-
     display_name = _versioned_name("slate-agents-dev")
 
     logger.info("Creating Agent Engine: %s", display_name)
-    remote = agent_engines.create(
-        agent_engine=adk_app,
-        requirements=REQUIREMENTS,
-        extra_packages=[_package_dir()],
-        display_name=display_name,
-        env_vars=_env_vars(),
+    remote = client.agent_engines.create(
+        agent=adk_app,
+        config={
+            "staging_bucket": staging_bucket,
+            "display_name": display_name,
+            "requirements": REQUIREMENTS,
+            "extra_packages": _EXTRA_PACKAGES,
+            "env_vars": _env_vars(),
+        },
     )
-    name = remote.gca_resource.name
+    name = remote.api_resource.name
     logger.info("Created Agent Engine: %s", name)
     return name
 
 
 def update_agent(resource_id: str) -> str:
-    """Update an existing Agent Engine instance. Prints the numeric ID to stdout."""
-    import cloudpickle  # type: ignore[import-untyped]
-    import vertexai  # type: ignore[import-untyped]
-    from vertexai import agent_engines  # type: ignore[import-untyped]
-
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     location = os.environ["GOOGLE_CLOUD_LOCATION"]
     staging_bucket = os.environ["STAGING_BUCKET"]
-    vertexai.init(project=project, location=location, staging_bucket=staging_bucket)
 
     resource_name = (
         f"projects/{project}/locations/{location}/reasoningEngines/{resource_id}"
@@ -140,56 +125,41 @@ def update_agent(resource_id: str) -> str:
         else resource_id
     )
 
+    client = _init_client()
     adk_app = _build_adk_app()
-
-    pickle_size = len(cloudpickle.dumps(adk_app))
-    logger.info("AdkApp pickle size: %d bytes (staging_bucket=%s)", pickle_size, staging_bucket)
-
     display_name = _versioned_name("slate-agents-dev")
 
     logger.info("Updating Agent Engine: %s → %s", resource_name, display_name)
-    remote = agent_engines.update(
-        resource_name=resource_name,
-        agent_engine=adk_app,
-        requirements=REQUIREMENTS,
-        extra_packages=[_package_dir()],
-        display_name=display_name,
-        env_vars=_env_vars(),
+    remote = client.agent_engines.update(
+        name=resource_name,
+        agent=adk_app,
+        config={
+            "staging_bucket": staging_bucket,
+            "display_name": display_name,
+            "requirements": REQUIREMENTS,
+            "extra_packages": _EXTRA_PACKAGES,
+            "env_vars": _env_vars(),
+        },
     )
-    name = remote.gca_resource.name
+    name = remote.api_resource.name
     logger.info("Updated Agent Engine: %s", name)
     return name
 
 
 def health_check(resource_id: str) -> bool:
-    """Verify that the deployed Agent Engine is reachable via the high-level SDK.
-
-    The v1beta1 ReasoningEngine proto has no `state` field — lifecycle state is
-    not exposed in that API. Instead we use vertexai.agent_engines.get() which
-    resolves the LRO and raises if the engine is not yet active or does not exist.
-    """
     try:
-        import vertexai  # type: ignore[import-untyped]
-        from vertexai import agent_engines  # type: ignore[import-untyped]
-
+        client = _init_client()
         project = os.environ["GOOGLE_CLOUD_PROJECT"]
         location = os.environ["GOOGLE_CLOUD_LOCATION"]
-        vertexai.init(
-            project=project, location=location, staging_bucket=os.environ["STAGING_BUCKET"]
-        )
-
         resource_name = (
             f"projects/{project}/locations/{location}/reasoningEngines/{resource_id}"
             if not resource_id.startswith("projects/")
             else resource_id
         )
-
-        engine = agent_engines.get(resource_name)
-        display_name = engine.display_name
-        logger.info("Agent Engine reachable: %s (%s)", resource_name, display_name)
+        engine = client.agent_engines.get(name=resource_name)
+        logger.info("Agent Engine reachable: %s (%s)", resource_name, engine.display_name)
         logger.info("Health check PASSED.")
         return True
-
     except Exception as e:
         logger.error("Health check FAILED — %s", e)
         return False
@@ -197,11 +167,11 @@ def health_check(resource_id: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="slate-agents deployment")
-    parser.add_argument("--validate", action="store_true", help="Validate env vars")
-    parser.add_argument("--create", action="store_true", help="Create new Agent Engine")
-    parser.add_argument("--update", action="store_true", help="Update existing Agent Engine")
-    parser.add_argument("--health", action="store_true", help="Post-deploy health check")
-    parser.add_argument("--resource-id", help="Agent Engine numeric ID (for --update/--health)")
+    parser.add_argument("--validate", action="store_true")
+    parser.add_argument("--create", action="store_true")
+    parser.add_argument("--update", action="store_true")
+    parser.add_argument("--health", action="store_true")
+    parser.add_argument("--resource-id")
     args = parser.parse_args()
 
     if args.validate:
@@ -211,7 +181,7 @@ def main() -> None:
 
     if args.create:
         name = create_agent()
-        print(name.split("/")[-1])  # numeric ID only — caller greps this
+        print(name.split("/")[-1])
         return
 
     if args.update:
