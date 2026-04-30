@@ -62,17 +62,25 @@ def _service_root() -> str:
 def _build_wheel() -> str:
     """Build a wheel for slate-agents and return the path to the .whl file."""
     import glob
+    import shutil
     import subprocess
 
     service_root = _service_root()
     dist_dir = os.path.join(service_root, "dist")
-    logger.info("Building slate-agents wheel in %s", service_root)
-    subprocess.run(
-        [sys.executable, "-m", "build", "--wheel", "--outdir", dist_dir],
+
+    # Prefer `python -m build` from PATH (works in CI and local venvs alike).
+    # Fall back to sys.executable only if `python` is not on PATH.
+    python = shutil.which("python") or shutil.which("python3") or sys.executable
+
+    logger.info("Building slate-agents wheel in %s (python: %s)", service_root, python)
+    result = subprocess.run(
+        [python, "-m", "build", "--wheel", "--outdir", dist_dir],
         cwd=service_root,
-        check=True,
-        capture_output=True,
+        capture_output=False,  # let stdout/stderr flow to CI logs
     )
+    if result.returncode != 0:
+        raise RuntimeError(f"`python -m build` failed with exit code {result.returncode}")
+
     wheels = glob.glob(os.path.join(dist_dir, "slate_agents-*.whl"))
     if not wheels:
         raise RuntimeError(f"No wheel found in {dist_dir} after build")
