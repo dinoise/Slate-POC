@@ -19,11 +19,13 @@ logger = logging.getLogger(__name__)
 
 
 def get_api_headers() -> dict[str, str]:
-    """Return HTTP headers for slate-api requests, with Bearer token if on GCP."""
-    headers: dict[str, str] = {"Content-Type": "application/json"}
+    """Return HTTP headers for slate-api requests, with Bearer token via ADC.
 
-    if settings.is_local:
-        return headers
+    Works in both local dev (gcloud auth application-default login) and
+    production (Agent Engine service account). If ADC is not configured,
+    sends without Authorization — slate-api will return 401 in that case.
+    """
+    headers: dict[str, str] = {"Content-Type": "application/json"}
 
     try:
         import google.auth.transport.requests
