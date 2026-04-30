@@ -44,10 +44,10 @@ REQUIREMENTS: list[str] = [
     "google-auth>=2.36.0",
 ]
 
-# Directory relative to services/agents/ that gets copied to /code/<dirname>/ in
-# the Agent Engine container. /code/ is on sys.path so `slate_agents` becomes
-# importable without a virtualenv install — matching how mk-agent-commercial works.
-EXTRA_PACKAGES: list[str] = ["./src/slate_agents"]
+# Directory relative to services/agents/ — Agent Engine copies it to /code/slate_agents/
+# inside the container. /code/ is on sys.path, so `slate_agents` is importable by
+# both cloudpickle unpickling and the control plane's python_file_api_builder.
+EXTRA_PACKAGES: list[str] = ["./slate_agents"]
 
 _RUNTIME_VAR_NAMES = [
     "GOOGLE_GENAI_USE_VERTEXAI",
@@ -70,9 +70,12 @@ def _service_root() -> str:
 
 
 def _build_adk_app():  # type: ignore[return]
-    src_dir = os.path.join(_service_root(), "src")
-    if src_dir not in sys.path:
-        sys.path.insert(0, src_dir)
+    # slate_agents is now at services/agents/slate_agents/ (no src/ layout).
+    # Add the service root so `import slate_agents` resolves locally the same
+    # way Agent Engine resolves it remotely (/code/slate_agents/).
+    service_root = _service_root()
+    if service_root not in sys.path:
+        sys.path.insert(0, service_root)
 
     from vertexai.agent_engines import AdkApp  # type: ignore[import-untyped]
 
