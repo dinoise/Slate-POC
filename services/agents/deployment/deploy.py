@@ -1,9 +1,14 @@
 """Deployment script for slate-agents on Vertex AI Agent Engine.
 
 Uses vertexai.Client (new client-based API) instead of agent_engines module
-functions. The Client API correctly handles extra_packages with relative paths.
+functions.
 
 Must be run from services/agents/ directory (default in CI via working-directory).
+
+extra_packages uses a directory path ("./src/slate_agents") so Agent Engine copies
+the package to /code/slate_agents/ inside the container. /code/ is on sys.path,
+making `slate_agents` importable by both cloudpickle and the control plane's
+python_file_api_builder — without requiring a virtualenv install.
 
 Usage:
     python deployment/deploy.py --validate
@@ -35,43 +40,20 @@ REQUIREMENTS: list[str] = [
     "google-cloud-aiplatform[adk,agent_engines]>=1.118.0",
     "google-adk>=1.31.1",
     "pydantic-settings>=2.0.0",
-    "httpx>=0.27.0",
+    "httpx>=0.28.0",
     "google-auth>=2.36.0",
 ]
+
+# Directory relative to services/agents/ that gets copied to /code/<dirname>/ in
+# the Agent Engine container. /code/ is on sys.path so `slate_agents` becomes
+# importable without a virtualenv install — matching how mk-agent-commercial works.
+EXTRA_PACKAGES: list[str] = ["./src/slate_agents"]
 
 _RUNTIME_VAR_NAMES = [
     "GOOGLE_GENAI_USE_VERTEXAI",
     "ROOT_AGENT_MODEL",
     "SLATE_API_URL",
 ]
-
-
-def _build_wheel() -> str:
-    """Build a wheel and return its absolute path.
-
-    Uses `uv build` which is always available in CI (we install uv in the
-    workflow). The wheel is installed into site-packages in the container,
-    making slate_agents importable regardless of sys.path — unlike passing
-    a directory which Agent Engine does NOT add to sys.path automatically.
-    """
-    import glob
-    import subprocess
-
-    service_root = _service_root()
-    dist_dir = os.path.join(service_root, "dist")
-    logger.info("Building wheel with uv build...")
-    result = subprocess.run(
-        ["uv", "build", "--wheel", "--out-dir", dist_dir],
-        cwd=service_root,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"uv build failed with exit code {result.returncode}")
-    wheels = glob.glob(os.path.join(dist_dir, "slate_agents-*.whl"))
-    if not wheels:
-        raise RuntimeError(f"No wheel found in {dist_dir}")
-    wheel = sorted(wheels)[-1]
-    logger.info("Built wheel: %s", wheel)
-    return wheel
 
 
 def validate() -> bool:
@@ -119,7 +101,6 @@ def _init_client():  # type: ignore[return]
 
 def create_agent() -> str:
     staging_bucket = os.environ["STAGING_BUCKET"]
-    wheel = _build_wheel()
     client = _init_client()
     adk_app = _build_adk_app()
     display_name = _versioned_name("slate-agents-dev")
@@ -131,7 +112,7 @@ def create_agent() -> str:
             "staging_bucket": staging_bucket,
             "display_name": display_name,
             "requirements": REQUIREMENTS,
-            "extra_packages": [wheel],
+            "extra_packages": EXTRA_PACKAGES,
             "env_vars": _env_vars(),
         },
     )
@@ -151,7 +132,6 @@ def update_agent(resource_id: str) -> str:
         else resource_id
     )
 
-    wheel = _build_wheel()
     client = _init_client()
     adk_app = _build_adk_app()
     display_name = _versioned_name("slate-agents-dev")
@@ -164,7 +144,7 @@ def update_agent(resource_id: str) -> str:
             "staging_bucket": staging_bucket,
             "display_name": display_name,
             "requirements": REQUIREMENTS,
-            "extra_packages": [wheel],
+            "extra_packages": EXTRA_PACKAGES,
             "env_vars": _env_vars(),
         },
     )

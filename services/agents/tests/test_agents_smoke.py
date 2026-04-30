@@ -9,7 +9,7 @@ def test_root_agent_importable() -> None:
 
     assert root_agent is not None
     assert app is not None
-    assert root_agent.name == "slate_root"
+    assert root_agent.name == "slate_agents"
 
 
 def test_sub_agents_registered() -> None:
