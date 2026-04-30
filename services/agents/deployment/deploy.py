@@ -167,7 +167,10 @@ def health_check(resource_id: str) -> bool:
             else resource_id
         )
         engine = client.agent_engines.get(name=resource_name)
-        logger.info("Agent Engine reachable: %s (%s)", resource_name, engine.display_name)
+        display_name = getattr(engine, "display_name", None) or getattr(
+            getattr(engine, "api_resource", None), "display_name", resource_name
+        )
+        logger.info("Agent Engine reachable: %s (%s)", resource_name, display_name)
         logger.info("Health check PASSED.")
         return True
     except Exception as e:
