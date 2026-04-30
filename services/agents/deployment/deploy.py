@@ -59,40 +59,14 @@ def _service_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _build_wheel() -> str:
-    """Build a wheel for slate-agents and return the path to the .whl file."""
-    import glob
-    import shutil
-    import subprocess
+def _package_dir() -> str:
+    """Return the path to the slate_agents source directory.
 
-    service_root = _service_root()
-    dist_dir = os.path.join(service_root, "dist")
-
-    # Use the Python that has `build` installed (the CI system Python, not the venv).
-    # sys.executable points to the venv python which may not have `build`.
-    # We search outside the venv by checking a clean PATH without .venv/bin.
-    clean_path = ":".join(p for p in os.environ.get("PATH", "").split(":") if ".venv" not in p)
-    python = (
-        shutil.which("python3", path=clean_path)
-        or shutil.which("python", path=clean_path)
-        or sys.executable
-    )
-
-    logger.info("Building slate-agents wheel in %s (python: %s)", service_root, python)
-    result = subprocess.run(
-        [python, "-m", "build", "--wheel", "--outdir", dist_dir],
-        cwd=service_root,
-        capture_output=False,  # let stdout/stderr flow to CI logs
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"`python -m build` failed with exit code {result.returncode}")
-
-    wheels = glob.glob(os.path.join(dist_dir, "slate_agents-*.whl"))
-    if not wheels:
-        raise RuntimeError(f"No wheel found in {dist_dir} after build")
-    wheel = sorted(wheels)[-1]
-    logger.info("Built wheel: %s", wheel)
-    return wheel
+    Agent Engine copies this directory into the container before unpickling,
+    so the module is importable at deserialization time — unlike a wheel, which
+    is installed after the pickle load and causes ModuleNotFoundError.
+    """
+    return os.path.join(_service_root(), "src", "slate_agents")
 
 
 def _build_adk_app():  # type: ignore[return]
@@ -129,7 +103,6 @@ def create_agent() -> str:
     staging_bucket = os.environ["STAGING_BUCKET"]
     vertexai.init(project=project, location=location, staging_bucket=staging_bucket)
 
-    wheel = _build_wheel()
     adk_app = _build_adk_app()
 
     pickle_size = len(cloudpickle.dumps(adk_app))
@@ -141,7 +114,7 @@ def create_agent() -> str:
     remote = agent_engines.create(
         agent_engine=adk_app,
         requirements=REQUIREMENTS,
-        extra_packages=[wheel],
+        extra_packages=[_package_dir()],
         display_name=display_name,
         env_vars=_env_vars(),
     )
@@ -167,7 +140,6 @@ def update_agent(resource_id: str) -> str:
         else resource_id
     )
 
-    wheel = _build_wheel()
     adk_app = _build_adk_app()
 
     pickle_size = len(cloudpickle.dumps(adk_app))
@@ -180,7 +152,7 @@ def update_agent(resource_id: str) -> str:
         resource_name=resource_name,
         agent_engine=adk_app,
         requirements=REQUIREMENTS,
-        extra_packages=[wheel],
+        extra_packages=[_package_dir()],
         display_name=display_name,
         env_vars=_env_vars(),
     )

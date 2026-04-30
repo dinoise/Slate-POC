@@ -70,8 +70,6 @@ jobs:
       - name: Install dependencies (with ADK)
         run: uv sync
 
-      - name: Install build tools
-        run: pip install build cloudpickle
 
       - name: Authenticate to GCP (WIF)
         uses: google-github-actions/auth@v2
