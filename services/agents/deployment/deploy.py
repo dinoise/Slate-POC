@@ -68,9 +68,15 @@ def _build_wheel() -> str:
     service_root = _service_root()
     dist_dir = os.path.join(service_root, "dist")
 
-    # Prefer `python -m build` from PATH (works in CI and local venvs alike).
-    # Fall back to sys.executable only if `python` is not on PATH.
-    python = shutil.which("python") or shutil.which("python3") or sys.executable
+    # Use the Python that has `build` installed (the CI system Python, not the venv).
+    # sys.executable points to the venv python which may not have `build`.
+    # We search outside the venv by checking a clean PATH without .venv/bin.
+    clean_path = ":".join(p for p in os.environ.get("PATH", "").split(":") if ".venv" not in p)
+    python = (
+        shutil.which("python3", path=clean_path)
+        or shutil.which("python", path=clean_path)
+        or sys.executable
+    )
 
     logger.info("Building slate-agents wheel in %s (python: %s)", service_root, python)
     result = subprocess.run(
