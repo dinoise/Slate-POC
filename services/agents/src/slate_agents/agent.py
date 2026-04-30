@@ -40,7 +40,7 @@ logger = get_logger(__name__)
 
 root_agent = Agent(
     model=settings.ROOT_AGENT_MODEL,
-    name="slate_root",
+    name="slate_agents",
     instruction=ROOT_AGENT_PROMPT,
     global_instruction=ROOT_AGENT_GLOBAL_INSTRUCTION,
     sub_agents=[
