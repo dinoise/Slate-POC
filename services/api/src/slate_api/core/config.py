@@ -39,7 +39,7 @@ class Settings(BaseAppSettings):
 
     # API metadata
     API_V1_PREFIX: str = "/api/v1"
-    PROJECT_NAME: str = "Adjuster Optimizer"
+    PROJECT_NAME: str = "Slate API"
     VERSION: str = "0.1.0"
     DEBUG: bool = True
 

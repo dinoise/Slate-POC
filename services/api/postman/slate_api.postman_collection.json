@@ -1,0 +1,1579 @@
+{
+  "info": {
+    "name": "Slate API",
+    "description": "Sistema de asignaci\u00f3n din\u00e1mica de ajustadores de seguros",
+    "version": "0.1.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "bearer",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ],
+              "query": []
+            },
+            "description": "Health check endpoint."
+          }
+        }
+      ]
+    },
+    {
+      "name": "incidents",
+      "item": [
+        {
+          "name": "Create new incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_id\": \"string\",\n  \"incident_type\": \"string\",\n  \"severity\": 1.0,\n  \"description\": \"string\",\n  \"latitude\": -90.0,\n  \"longitude\": -180.0,\n  \"incident_datetime\": \"2026-01-01T00:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Create a new incident and schedule automatic adjuster assignment.\n\n\n**Request Body Fields:**\n- **external_id** (required): `string`\n- **incident_type** (required): `string`\n- **severity** (required): `integer` \u2014 Severity from 1 (low) to 5 (high)\n- **description**: `object`\n- **latitude** (required): `number`\n- **longitude** (required): `number`\n- **address**: `object`\n- **incident_datetime** (required): `string(date-time)`\n- **reported_by_user_id**: `object`"
+          }
+        },
+        {
+          "name": "Get all incidents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents"
+              ],
+              "query": [
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "description": "Type: integer | min: 0 | default: 0",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Type: integer | min: 1 | max: 1000 | default: 100",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "string",
+                  "description": "Type: string",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get all incidents with optional filtering."
+          }
+        },
+        {
+          "name": "Cancel all active incidents",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents"
+              ],
+              "query": []
+            },
+            "description": "Cancel all active incidents and release their assigned adjusters.\n\nUsed by the demo reset flow (load initial state)."
+          }
+        },
+        {
+          "name": "Get incident by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents",
+                "{incident_id}"
+              ],
+              "query": []
+            },
+            "description": "Get a specific incident by ID."
+          }
+        },
+        {
+          "name": "Update incident",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents",
+                "{incident_id}"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"incident_type\": \"string\",\n  \"severity\": 1.0,\n  \"description\": \"string\",\n  \"status\": \"pending\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Update an incident.\n\n\n**Request Body Fields:**\n- **incident_type**: `object`\n- **severity**: `object`\n- **description**: `object`\n- **status**: `object`"
+          }
+        },
+        {
+          "name": "Soft-delete incident",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents",
+                "{incident_id}"
+              ],
+              "query": []
+            },
+            "description": "Soft-delete an incident (sets status to cancelled)."
+          }
+        },
+        {
+          "name": "Get nearby incidents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/nearby/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents",
+                "nearby"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "-90",
+                  "description": "Type: number | min: -90 | max: 90",
+                  "disabled": false
+                },
+                {
+                  "key": "longitude",
+                  "value": "-180",
+                  "description": "Type: number | min: -180 | max: 180",
+                  "disabled": false
+                },
+                {
+                  "key": "radius_km",
+                  "value": "10.0",
+                  "description": "Type: number | max: 100 | default: 10.0",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Type: integer | min: 1 | max: 1000 | default: 100",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get incidents near a location."
+          }
+        }
+      ]
+    },
+    {
+      "name": "adjusters",
+      "item": [
+        {
+          "name": "Create new adjuster",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/adjusters/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adjusters"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_id\": \"string\",\n  \"first_name\": \"string\",\n  \"last_name\": \"string\",\n  \"email\": \"user@example.com\",\n  \"phone\": \"string\",\n  \"home_latitude\": -90.0,\n  \"home_longitude\": -180.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Create a new adjuster.\n\n\n**Request Body Fields:**\n- **external_id** (required): `string`\n- **first_name** (required): `string`\n- **last_name** (required): `string`\n- **email** (required): `string(email)`\n- **phone**: `object`\n- **home_latitude** (required): `number`\n- **home_longitude** (required): `number`\n- **skills**: `array`\n- **max_cases_per_day**: `integer`"
+          }
+        },
+        {
+          "name": "Get all adjusters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/adjusters/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adjusters"
+              ],
+              "query": [
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "description": "Type: integer | min: 0 | default: 0",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Type: integer | min: 1 | max: 1000 | default: 100",
+                  "disabled": true
+                },
+                {
+                  "key": "is_active",
+                  "value": "True",
+                  "description": "Type: string",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get all adjusters, optionally filtered by active status."
+          }
+        },
+        {
+          "name": "Get available adjusters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/adjusters/available",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adjusters",
+                "available"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "-90",
+                  "description": "Type: string",
+                  "disabled": true
+                },
+                {
+                  "key": "longitude",
+                  "value": "-180",
+                  "description": "Type: string",
+                  "disabled": true
+                },
+                {
+                  "key": "radius_km",
+                  "value": "50.0",
+                  "description": "Type: number | max: 200 | default: 50.0",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Type: integer | min: 1 | max: 1000 | default: 100",
+                  "disabled": true
+                },
+                {
+                  "key": "scenario",
+                  "value": "initial",
+                  "description": "Positioning scenario to use for current location. | Type: string | default: initial",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get available adjusters with their current working position.\n\nDistance filter and returned coordinates use ``adjuster_positions``\nfor the given scenario.  Falls back to ``home_location`` when no\nposition row exists.\n\nMust be declared before /{adjuster_id} so FastAPI does not try to\nparse \"available\" as an integer path parameter."
+          }
+        },
+        {
+          "name": "Reset all adjusters to available",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/adjusters/reset-status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adjusters",
+                "reset-status"
+              ],
+              "query": []
+            },
+            "description": "Set all busy/en_route/on_site active adjusters back to available.\n\nUsed by the demo reset flow (load initial state)."
+          }
+        },
+        {
+          "name": "Get adjuster by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/adjusters/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adjusters",
+                "{adjuster_id}"
+              ],
+              "query": []
+            },
+            "description": "Get a specific adjuster by ID."
+          }
+        },
+        {
+          "name": "Update adjuster",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/adjusters/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adjusters",
+                "{adjuster_id}"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"string\",\n  \"last_name\": \"string\",\n  \"email\": \"user@example.com\",\n  \"phone\": \"string\",\n  \"skills\": [\n    \"string\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Update an adjuster.\n\n\n**Request Body Fields:**\n- **first_name**: `object`\n- **last_name**: `object`\n- **email**: `object`\n- **phone**: `object`\n- **skills**: `object`\n- **max_cases_per_day**: `object`\n- **is_active**: `object`\n- **status**: `object`"
+          }
+        },
+        {
+          "name": "Soft-delete adjuster",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/adjusters/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adjusters",
+                "{adjuster_id}"
+              ],
+              "query": []
+            },
+            "description": "Soft-delete an adjuster (sets is_active=False, status=offline)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "agents",
+      "item": [
+        {
+          "name": "Create an agent session with initial context",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agents/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "agents",
+                "sessions"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_type\": \"field_guide\",\n  \"context\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Create a new Agent Engine session.\n\nThe `context` payload is injected as initial_state once and persisted\nfor the entire conversation \u2014 no need to resend it on each turn.\n\n- **field_guide**: pass assignment_id, incident_id, incident_type, adjuster_id\n- **analytics**: pass dispatcher_id, active_assignment_count (optional hints)\n\n\n**Request Body Fields:**\n- **agent_type** (required): `string`\n- **context**: `object`"
+          }
+        },
+        {
+          "name": "Send a message and stream the agent response (SSE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agents/sessions/string/stream",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "agents",
+                "sessions",
+                "{session_id}",
+                "stream"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Send a message and receive a Server-Sent Events stream.\n\nEach event is `data: <text_chunk>\\n\\n`.\nThe stream ends with `data: [DONE]\\n\\n`.\nOn error: `data: [ERROR] <message>\\n\\n`.\n\nThe frontend should consume this with `response.body.getReader()` (Fetch API),\nNOT with `EventSource` \u2014 EventSource only supports GET and cannot send a body.\n\n\n**Request Body Fields:**\n- **message** (required): `string`"
+          }
+        },
+        {
+          "name": "Delete an agent session",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agents/sessions/string",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "agents",
+                "sessions",
+                "{session_id}"
+              ],
+              "query": []
+            },
+            "description": "Delete an Agent Engine session and free its resources."
+          }
+        }
+      ]
+    },
+    {
+      "name": "assignments",
+      "item": [
+        {
+          "name": "Aggregated assignment metrics for the analytics AI agent",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                "metrics"
+              ],
+              "query": [
+                {
+                  "key": "window_hours",
+                  "value": "8",
+                  "description": "Hours to look back for volume/resolution stats | Type: integer | min: 1 | max: 168 | default: 8",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Return aggregated assignment metrics.\n\nUsed by the analytics sub-agent to answer questions like:\n- How many assignments are active right now and in what state?\n- What's the average resolution time in the last shift?\n- How many incidents were created vs resolved in the last N hours?"
+          }
+        },
+        {
+          "name": "Create new assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"incident_id\": 1,\n  \"adjuster_id\": 1,\n  \"notes\": \"string\",\n  \"assigned_at\": \"2026-01-01T00:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Create a new assignment of an adjuster to an incident.\n\n\n**Request Body Fields:**\n- **incident_id** (required): `integer`\n- **adjuster_id** (required): `integer`\n- **notes**: `object`\n- **assigned_at**: `string(date-time)`"
+          }
+        },
+        {
+          "name": "Get all assignments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments"
+              ],
+              "query": [
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "description": "Type: integer | min: 0 | default: 0",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Type: integer | min: 1 | max: 1000 | default: 100",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "string",
+                  "description": "Type: string",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get all assignments with optional filtering."
+          }
+        },
+        {
+          "name": "Compute a single point-to-point route",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/route",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                "route"
+              ],
+              "query": [
+                {
+                  "key": "origin_lat",
+                  "value": "-90",
+                  "description": "Type: number | min: -90 | max: 90",
+                  "disabled": false
+                },
+                {
+                  "key": "origin_lon",
+                  "value": "-180",
+                  "description": "Type: number | min: -180 | max: 180",
+                  "disabled": false
+                },
+                {
+                  "key": "destination_lat",
+                  "value": "-90",
+                  "description": "Type: number | min: -90 | max: 90",
+                  "disabled": false
+                },
+                {
+                  "key": "destination_lon",
+                  "value": "-180",
+                  "description": "Type: number | min: -180 | max: 180",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Return the route geometry between two points using the active routing provider.\n\nThe polyline uses precision-5 encoding (compatible with Leaflet's\nL.PolylineUtil.decode and the custom decodePolyline helper in the frontend)."
+          }
+        },
+        {
+          "name": "Get assignments for incident",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/by-incident/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                "by-incident",
+                "{incident_id}"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Type: integer | min: 1 | max: 1000 | default: 100",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get all assignments for a specific incident."
+          }
+        },
+        {
+          "name": "Get assignments for adjuster",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/by-adjuster/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                "by-adjuster",
+                "{adjuster_id}"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Type: integer | min: 1 | max: 1000 | default: 100",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get all assignments for a specific adjuster."
+          }
+        },
+        {
+          "name": "Get status history for an assignment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/1/history",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                "{assignment_id}",
+                "history"
+              ],
+              "query": []
+            },
+            "description": "Return the immutable audit trail of status transitions for an assignment."
+          }
+        },
+        {
+          "name": "Get assignment by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                "{assignment_id}"
+              ],
+              "query": []
+            },
+            "description": "Get a specific assignment by ID."
+          }
+        },
+        {
+          "name": "Update assignment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                "{assignment_id}"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estimated_arrival_time\": \"2026-01-01T00:00:00Z\",\n  \"actual_arrival_time\": \"2026-01-01T00:00:00Z\",\n  \"completed_at\": \"2026-01-01T00:00:00Z\",\n  \"status\": \"assigned\",\n  \"notes\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Update an assignment.\n\n\n**Request Body Fields:**\n- **estimated_arrival_time**: `object`\n- **actual_arrival_time**: `object`\n- **completed_at**: `object`\n- **status**: `object`\n- **notes**: `object`"
+          }
+        },
+        {
+          "name": "Optimize adjuster-to-incident assignments",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/optimize",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                "optimize"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"incidents\": [\n    {\n      \"incident_id\": 1,\n      \"latitude\": -90.0,\n      \"longitude\": -180.0\n    }\n  ],\n  \"adjusters\": [\n    {\n      \"adjuster_id\": 1,\n      \"latitude\": -90.0,\n      \"longitude\": -180.0\n    }\n  ],\n  \"use_db\": false,\n  \"radius_km\": 30.0,\n  \"persist\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Solve the assignment problem optimally using OR-Tools LinearSumAssignment.\n\nMinimizes the total travel time across all assignments.\nAccepts explicit incident/adjuster lists, or queries the DB when `use_db=True`.\n\nReturns assignments with travel times and solver metrics.\n\n\n**Request Body Fields:**\n- **incidents**: `array` \u2014 Incidents to assign. Required when use_db=False.\n  Array items:\n    - **incident_id** (required): `integer`\n    - **latitude** (required): `number`\n    - **longitude** (required): `number`\n- **adjusters**: `array` \u2014 Available adjusters. Required when use_db=False.\n  Array items:\n    - **adjuster_id** (required): `integer`\n    - **latitude** (required): `number`\n    - **longitude** (required): `number`\n- **use_db**: `boolean` \u2014 Query DB for pending incidents and available adjusters.\n- **radius_km**: `number` \u2014 Search radius in km used to filter candidate adjusters.\n- **persist**: `boolean` \u2014 Persist resulting assignments to the database.\n- **max_travel_min**: `number` \u2014 Maximum acceptable travel time in minutes. Adjuster-incident pairs exceeding this limit are treated as unreachable (set to np.inf) before solving.\n- **top_k**: `integer` \u2014 Number of candidate adjusters to return per incident, sorted by travel time. Only the optimal assignment (rank 1) is persisted. Candidates 2..K are included in the response for comparison only."
+          }
+        }
+      ]
+    },
+    {
+      "name": "assignment-notes",
+      "item": [
+        {
+          "name": "Add an agent note to an assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/1/notes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                "{assignment_id}",
+                "notes"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"string\",\n  \"agent_type\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "\n**Request Body Fields:**\n- **content** (required): `string`\n- **agent_type**: `object`"
+          }
+        },
+        {
+          "name": "Get all agent notes for an assignment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assignments/1/notes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                "{assignment_id}",
+                "notes"
+              ],
+              "query": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "demand-predictions",
+      "item": [
+        {
+          "name": "Get available time slots that have demand predictions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/demand-predictions/available-slots",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "demand-predictions",
+                "available-slots"
+              ],
+              "query": []
+            },
+            "description": "Return all (dia_semana_num, hora_num) pairs that have demand predictions."
+          }
+        },
+        {
+          "name": "Get demand predictions by time slot and viewport bbox",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/demand-predictions/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "demand-predictions"
+              ],
+              "query": [
+                {
+                  "key": "hora_num",
+                  "value": "0",
+                  "description": "Hour of day (0-23) | Type: integer | min: 0 | max: 23",
+                  "disabled": false
+                },
+                {
+                  "key": "dia_semana_num",
+                  "value": "0",
+                  "description": "Day of week (0=Mon, 6=Sun) | Type: integer | min: 0 | max: 6",
+                  "disabled": false
+                },
+                {
+                  "key": "bbox",
+                  "value": "19.2,-99.4,19.6,-99.0",
+                  "description": "Bounding box as 'min_lat,min_lon,max_lat,max_lon' | Type: string",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "5000",
+                  "description": "Type: integer | min: 1 | max: 5000 | default: 5000",
+                  "disabled": true
+                },
+                {
+                  "key": "min_pred_abs",
+                  "value": "0.0",
+                  "description": "Minimum demand threshold. Hexagons with pred_abs below this value are excluded at the DB level. Clients should increase this at low zoom levels to reduce response size. | Type: number | min: 0.0 | default: 0.0",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get demand predictions for a time slot filtered by viewport bounding box.\n\nbbox format: min_lat,min_lon,max_lat,max_lon"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adjuster-positions",
+      "item": [
+        {
+          "name": "List available positioning scenarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/adjuster-positions/scenarios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adjuster-positions",
+                "scenarios"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "Get adjuster positions for a scenario",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/adjuster-positions/scenarios/string",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adjuster-positions",
+                "scenarios",
+                "{scenario}"
+              ],
+              "query": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "recommendations",
+      "item": [
+        {
+          "name": "Generate greedy positioning recommendations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/recommendations/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "recommendations"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scenario\": \"initial\",\n  \"hora_num\": 0.0,\n  \"dia_semana_num\": 0.0,\n  \"radio_km\": 7.5,\n  \"umbral_gain\": 0.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Run the greedy positioning algorithm for a given time slot.\n\n- Reads adjuster positions from the specified `scenario`.\n- Loads demand predictions for `hora_num` \u00d7 `dia_semana_num`.\n- Returns recommendations (adjusters to move + destination hex).\n- If `save_as_scenario` is set, persists the result as a new scenario.\n\n\n**Request Body Fields:**\n- **scenario**: `string` \u2014 Source scenario for adjuster positions\n- **hora_num** (required): `integer` \u2014 Hour of day (0-23)\n- **dia_semana_num** (required): `integer` \u2014 Day of week (0=Mon, 6=Sun)\n- **radio_km**: `number` \u2014 Max relocation radius in km\n- **umbral_gain**: `number` \u2014 Min demand gain to trigger move\n- **spread_factor**: `number` \u2014 Dispersion factor (0=pure demand-greedy, 1=maximum spread). Penalises candidates near already-reserved hexagons following a p-median-inspired objective: score = pred_abs - spread_factor * \u03a3 pred_abs(neighbour) for neighbours within k_rings H3 rings.\n- **spread_rings**: `integer` \u2014 H3 ring radius used for neighbour penalty (k_rings \u00d7 ~1.2 km at R8).\n- **save_as_scenario**: `object` \u2014 If set, persist recommended positions as a new scenario with this name"
+          }
+        }
+      ]
+    },
+    {
+      "name": "settings",
+      "item": [
+        {
+          "name": "Get active routing provider",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/settings/provider",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "settings",
+                "provider"
+              ],
+              "query": []
+            },
+            "description": "Return the currently active routing provider and available options."
+          }
+        },
+        {
+          "name": "Switch active routing provider",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/settings/provider",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "settings",
+                "provider"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Replace the active routing provider at runtime.\n\nThe switch is atomic \u2014 in-flight requests that already hold a reference to\nthe old provider complete normally; new requests get the updated one.\n\nRaises:\n    422: If *provider* is not a recognised provider name.\n\n\n**Request Body Fields:**\n- **provider** (required): `string`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "item": [
+        {
+          "name": "Create new user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"string\",\n  \"last_name\": \"string\",\n  \"email\": \"user@example.com\",\n  \"phone\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "\n**Request Body Fields:**\n- **first_name** (required): `string`\n- **last_name** (required): `string`\n- **email** (required): `string(email)`\n- **phone**: `object`"
+          }
+        },
+        {
+          "name": "Get all users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "description": "Type: integer | min: 0 | default: 0",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Type: integer | min: 1 | max: 1000 | default: 100",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get user by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{user_id}"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "Update user",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{user_id}"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"string\",\n  \"last_name\": \"string\",\n  \"email\": \"user@example.com\",\n  \"phone\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "\n**Request Body Fields:**\n- **first_name**: `object`\n- **last_name**: `object`\n- **email**: `object`\n- **phone**: `object`"
+          }
+        },
+        {
+          "name": "Delete user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer}}",
+                "description": "Google ID token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{user_id}"
+              ],
+              "query": []
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -27,7 +27,7 @@ class SessionManager:
         self.location = location
         self.app_name = app_name
         self._svc = VertexAiSessionService(
-            project_id=project_id, location=location, app_name=app_name
+            project=project_id, location=location, agent_engine_id=app_name
         )
         logger.info("SessionManager ready for app: %s", app_name)
 
@@ -41,20 +41,26 @@ class SessionManager:
             },
             **(initial_state or {}),
         }
-        session = await self._svc.create_session(user_id=user_id, state=state)
+        session = await self._svc.create_session(
+            app_name=self.app_name, user_id=user_id, state=state
+        )
         logger.debug("Created session %s for user %s", session.id, user_id)
         return (session.id, session)
 
     async def get_session(self, user_id: str, session_id: str) -> Session | None:
         try:
-            return await self._svc.get_session(user_id=user_id, session_id=session_id)
+            return await self._svc.get_session(
+                app_name=self.app_name, user_id=user_id, session_id=session_id
+            )
         except Exception as exc:
             logger.warning("Failed to get session %s: %s", session_id, exc)
             return None
 
     async def delete_session(self, user_id: str, session_id: str) -> bool:
         try:
-            await self._svc.delete_session(user_id=user_id, session_id=session_id)
+            await self._svc.delete_session(
+                app_name=self.app_name, user_id=user_id, session_id=session_id
+            )
             return True
         except Exception as exc:
             logger.error("Failed to delete session %s: %s", session_id, exc)
@@ -62,7 +68,7 @@ class SessionManager:
 
     async def list_sessions(self, user_id: str) -> list[Session]:
         try:
-            response = await self._svc.list_sessions(user_id=user_id)
+            response = await self._svc.list_sessions(app_name=self.app_name, user_id=user_id)
             return list(response.sessions) if response.sessions else []
         except Exception as exc:
             logger.error("Failed to list sessions for user %s: %s", user_id, exc)

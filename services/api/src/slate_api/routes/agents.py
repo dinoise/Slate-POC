@@ -59,7 +59,7 @@ async def create_session(
     - **analytics**: pass dispatcher_id, active_assignment_count (optional hints)
     """
     session_id = await service.create_session(
-        user_id=str(current_user.id),
+        user_id=str(current_user["sub"]),
         agent_type=body.agent_type,
         context=body.context,
     )
@@ -88,7 +88,7 @@ async def stream_message(
     """
     return StreamingResponse(
         service.stream_message(
-            user_id=str(current_user.id),
+            user_id=str(current_user["sub"]),
             session_id=session_id,
             message=body.message,
         ),
@@ -111,4 +111,4 @@ async def delete_session(
     current_user: CurrentUser,
 ) -> None:
     """Delete an Agent Engine session and free its resources."""
-    await service.delete_session(user_id=str(current_user.id), session_id=session_id)
+    await service.delete_session(user_id=str(current_user["sub"]), session_id=session_id)
