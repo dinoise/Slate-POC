@@ -1,6 +1,24 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 
+// Cross-browser SpeechRecognition — webkit prefix on Chrome/Android
+type AnySpeechRecognition = typeof window extends { SpeechRecognition: infer T } ? T : never
+interface SpeechRecognitionInstance {
+  lang: string
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onend: (() => void) | null
+  onerror: (() => void) | null
+  start(): void
+  stop(): void
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionInstance
+type ExtendedWindow = Window & typeof globalThis & {
+  SpeechRecognition?: SpeechRecognitionCtor
+  webkitSpeechRecognition?: SpeechRecognitionCtor
+}
+
 const props = defineProps<{
   disabled: boolean
 }>()
@@ -11,10 +29,10 @@ const emit = defineEmits<{
 
 const text = ref('')
 const isListening = ref(false)
-let recognition: SpeechRecognition | null = null
+let recognition: SpeechRecognitionInstance | null = null
 
 const canSend = computed(() => text.value.trim().length > 0 && !props.disabled)
-const supportsSpeech = typeof window !== 'undefined' && 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window
+const supportsSpeech = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
 
 function send() {
   const msg = text.value.trim()
@@ -38,7 +56,9 @@ function toggleVoice() {
     return
   }
 
-  const SR = (window.SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition: typeof SpeechRecognition }).webkitSpeechRecognition)
+  const w = window as ExtendedWindow
+  const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition
+  if (!SR) return
   recognition = new SR()
   recognition.lang = 'es-MX'
   recognition.interimResults = false

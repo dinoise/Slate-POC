@@ -236,7 +236,7 @@ watch(events, async (evts) => {
       if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
       if (incidentMarker) { map.removeLayer(incidentMarker); incidentMarker = null }
     }
-    incidentMeta.value = { type: null, address: null, lat: null, lon: null, severity: null }
+    incidentMeta.value = { type: null, description: null, address: null, lat: null, lon: null, severity: null }
     return
   }
 
@@ -305,7 +305,7 @@ watch(
         if (incidentMarker) { map.removeLayer(incidentMarker); incidentMarker = null }
         if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
       }
-      incidentMeta.value = { type: null, address: null, lat: null, lon: null, severity: null }
+      incidentMeta.value = { type: null, description: null, address: null, lat: null, lon: null, severity: null }
     }
   },
 )
