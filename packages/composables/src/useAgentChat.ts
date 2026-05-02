@@ -166,6 +166,10 @@ export function useAgentChat() {
     messages.value = []
   }
 
+  function dismissMessage(id: string): void {
+    messages.value = messages.value.filter((m) => m.id !== id)
+  }
+
   return {
     sessionId,
     messages,
@@ -178,6 +182,7 @@ export function useAgentChat() {
     sendAutoMessage,
     endSession,
     clearMessages,
+    dismissMessage,
   }
 }
 

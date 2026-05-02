@@ -61,8 +61,7 @@ function toggleExpanded() {
 }
 
 function dismissMessage(id: string) {
-  const idx = props.chat.messages.value.findIndex((m) => m.id === id)
-  if (idx !== -1) props.chat.messages.value.splice(idx, 1)
+  props.chat.dismissMessage(id)
 }
 
 // Touch/swipe gesture handling
