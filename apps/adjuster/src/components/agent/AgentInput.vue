@@ -2,7 +2,6 @@
 import { ref, computed } from 'vue'
 
 // Cross-browser SpeechRecognition — webkit prefix on Chrome/Android
-type AnySpeechRecognition = typeof window extends { SpeechRecognition: infer T } ? T : never
 interface SpeechRecognitionInstance {
   lang: string
   interimResults: boolean
