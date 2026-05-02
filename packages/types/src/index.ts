@@ -281,3 +281,42 @@ export interface RecommendationResponse {
   recommendations: RecommendationItem[]
   saved_as: string | null
 }
+
+// ── Agent ─────────────────────────────────────────────────────────────────────
+
+export type AgentType = 'field_guide' | 'analytics'
+
+export type AgentCardType =
+  | 'briefing'
+  | 'procedures'
+  | 'alert'
+  | 'note_logged'
+  | 'service_requested'
+  | 'chat'
+
+export interface AgentMessage {
+  id: string
+  role: 'user' | 'agent'
+  content: string
+  cardType: AgentCardType
+  timestamp: string
+  /** True for notes loaded from assignment_notes (historical, not from this session) */
+  isHistorical?: boolean
+}
+
+export interface AgentSessionContext {
+  assignment_id: number
+  incident_id: number
+  incident_type: string
+  incident_description: string
+  adjuster_id: number
+}
+
+export interface AssignmentNote {
+  id: number
+  assignment_id: number
+  content: string
+  created_by_agent: boolean
+  agent_type: string | null
+  created_at: string
+}

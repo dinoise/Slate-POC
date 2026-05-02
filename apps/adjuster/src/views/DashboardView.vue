@@ -3,18 +3,20 @@ import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet-ant-path'
-import { useSSE } from '@slate/composables'
+import { useSSE, useAgentChat } from '@slate/composables'
 import { useRoute } from '@slate/composables'
 import { useAdjusterSessionStore } from '@/stores/adjusterSession'
 import { incidentsApi } from '@slate/api-client'
 import AdjusterSelector from '@/components/AdjusterSelector.vue'
 import AssignmentCard from '@/components/AssignmentCard.vue'
 import NewAssignmentBanner from '@/components/NewAssignmentBanner.vue'
+import AgentPanel from '@/components/agent/AgentPanel.vue'
 import type { AssignmentEvent } from '@slate/types'
 import { AssignmentStatus } from '@slate/types'
 
 const store = useAdjusterSessionStore()
 const { buildRouteLayer, removeRouteLayer, fetchRoute, routeFromPayload } = useRoute()
+const chat = useAgentChat()
 
 // ── Map ───────────────────────────────────────────────────────────────────────
 const mapContainer = ref<HTMLElement>()
@@ -103,11 +105,12 @@ watch(
 // Holds enriched incident info from SSE or initial load
 const incidentMeta = ref<{
   type: string | null
+  description: string | null
   address: string | null
   lat: number | null
   lon: number | null
   severity: number | null
-}>({ type: null, address: null, lat: null, lon: null, severity: null })
+}>({ type: null, description: null, address: null, lat: null, lon: null, severity: null })
 
 watch(
   () => store.activeAssignment,
@@ -123,6 +126,7 @@ watch(
         const incident = await incidentsApi.get(assignment.incident_id)
         incidentMeta.value = {
           type: incident.incident_type,
+          description: incident.description,
           address: incident.address,
           lat: incident.latitude,
           lon: incident.longitude,
@@ -157,6 +161,53 @@ watch(
       } else {
         await drawRoute(adjLat, adjLon, lat, lon)
       }
+    }
+  },
+)
+
+// ── Agent session lifecycle ───────────────────────────────────────────────────
+watch(
+  () => store.activeAssignment,
+  async (assignment, prev) => {
+    if (assignment && !prev) {
+      // Ensure incidentMeta is populated before starting the agent session.
+      // On SSE-triggered assignments it may still be empty — fetch from API.
+      if (!incidentMeta.value.type) {
+        try {
+          const incident = await incidentsApi.get(assignment.incident_id)
+          incidentMeta.value = {
+            type: incident.incident_type,
+            description: incident.description,
+            address: incident.address,
+            lat: incident.latitude,
+            lon: incident.longitude,
+            severity: incident.severity,
+          }
+        } catch { /* non-fatal — agent will use get_incident_details tool */ }
+      }
+
+      // New assignment: start session and trigger proactive briefing
+      await chat.startSession({
+        assignment_id: assignment.id,
+        incident_id: assignment.incident_id,
+        incident_type: incidentMeta.value.type ?? '',
+        incident_description: incidentMeta.value.description ?? '',
+        adjuster_id: store.adjuster?.id ?? 0,
+      })
+      if (chat.hasSession.value) {
+        const parts: string[] = [
+          `Nueva asignación #${assignment.id} activa.`,
+          `Siniestro #${assignment.incident_id}`,
+          incidentMeta.value.type ? `tipo: ${incidentMeta.value.type}` : '',
+          incidentMeta.value.address ? `dirección: ${incidentMeta.value.address}` : '',
+          incidentMeta.value.description ? `descripción: ${incidentMeta.value.description}` : '',
+          'Usa get_incident_details para obtener datos completos y genera el briefing con procedimientos paso a paso.',
+        ]
+        await chat.sendAutoMessage(parts.filter(Boolean).join('. '))
+      }
+    } else if (!assignment && prev) {
+      // Assignment ended: close session
+      chat.endSession(prev.id)
     }
   },
 )
@@ -197,6 +248,7 @@ watch(events, async (evts) => {
   // Update incident meta from SSE payload (already enriched by notifications service)
   incidentMeta.value = {
     type: ev.incident.type ?? null,
+    description: ev.incident.description ?? null,
     address: ev.incident.address ?? null,
     lat: ev.incident.latitude ?? null,
     lon: ev.incident.longitude ?? null,
@@ -367,6 +419,9 @@ const sseBadgeText = computed(() => {
   <!-- SSE new assignment banner (only fires on new assignment, not status transitions) -->
   <NewAssignmentBanner :event="latestNewAssignmentEvent" />
 
+  <!-- Field Guide agent panel — visible when adjuster has an active assignment -->
+  <AgentPanel :chat="chat" :visible="!!store.activeAssignment" />
+
   <!-- Completion / cancellation snackbar -->
   <v-snackbar
     v-model="completionSnack.visible"
@@ -399,6 +454,8 @@ const sseBadgeText = computed(() => {
 .adjuster-map {
   flex: 1;
   min-height: 0;
+  /* Reserve space for the collapsed agent panel (68px + safe area) */
+  padding-bottom: calc(68px + env(safe-area-inset-bottom));
 }
 
 /* Desktop: side-by-side */
@@ -417,6 +474,8 @@ const sseBadgeText = computed(() => {
   .adjuster-map {
     flex: 1;
     height: 100%;
+    /* Panel is fixed over the map — same bottom reserve */
+    padding-bottom: calc(68px + env(safe-area-inset-bottom));
   }
 }
 </style>

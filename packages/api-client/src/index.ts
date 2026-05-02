@@ -216,3 +216,7 @@ export const recommendationsApi = {
       body: JSON.stringify(req),
     }),
 }
+
+// ── Agents ────────────────────────────────────────────────────────────────────
+
+export { agentsApi } from './agents'
