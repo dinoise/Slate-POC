@@ -129,18 +129,18 @@ export function useAgentChat() {
       for await (const rawChunk of agentsApi.streamMessage(sessionId.value, text)) {
         // Backend escapes \n → \\n for SSE transport; restore real newlines
         const chunk = rawChunk.replace(/\\n/g, '\n')
-        const current = messages.value[idx]
+        const current = messages.value[idx]!
         // Use splice for guaranteed Vue reactivity on array element replacement
         messages.value.splice(idx, 1, { ...current, content: current.content + chunk })
       }
       // Infer card type from final accumulated content
-      const final = messages.value[idx]
+      const final = messages.value[idx]!
       messages.value.splice(idx, 1, {
         ...final,
         cardType: inferCardType(final.content, 'agent'),
       })
     } catch (e) {
-      const current = messages.value[idx]
+      const current = messages.value[idx]!
       messages.value.splice(idx, 1, {
         ...current,
         content: 'Error al contactar al asistente. Intenta de nuevo.',
