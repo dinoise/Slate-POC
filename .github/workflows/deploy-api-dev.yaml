@@ -71,6 +71,7 @@ jobs:
         GOOGLE_SERVICE_AUDIENCES=poc-api-dev-service-audiences:latest
       cloudrun-env-vars: |
         TRAFFIC_PROVIDER=google
+        AGENT_ENGINE_ID=807028890403864576
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
