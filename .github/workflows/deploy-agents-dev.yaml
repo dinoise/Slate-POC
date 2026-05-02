@@ -89,6 +89,7 @@ jobs:
           STAGING_BUCKET: gs://lennken-poc-agents-staging
           ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
           SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
+          LOG_LEVEL: "DEBUG"
 
       - name: Resolve existing Agent Engine ID
         id: resolve
