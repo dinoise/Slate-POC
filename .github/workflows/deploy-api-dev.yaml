@@ -72,6 +72,8 @@ jobs:
       cloudrun-env-vars: |
         TRAFFIC_PROVIDER=google
         AGENT_ENGINE_ID=807028890403864576
+        VERTEX_PROJECT=lennken-poc
+        VERTEX_LOCATION=us-central1
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
