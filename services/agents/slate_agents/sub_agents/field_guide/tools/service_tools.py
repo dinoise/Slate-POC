@@ -6,6 +6,9 @@ import httpx
 
 from ....core.config import settings
 from ....core.http_auth import get_api_headers
+from ....core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _VALID_SERVICES = {"ambulancia", "grua", "policia", "bomberos"}
 
@@ -24,7 +27,16 @@ def request_emergency_service(service: str, reason: str, tool_context) -> dict: 
         dict with confirmation status and the list of all requested services.
     """
     service = service.lower().strip()
+    logger.info(
+        "request_emergency_service called | service=%s reason=%r",
+        service,
+        reason[:80] if reason else "",
+    )
+
     if service not in _VALID_SERVICES:
+        logger.warning(
+            "request_emergency_service: invalid service=%r valid=%s", service, _VALID_SERVICES
+        )
         return {
             "error": f"Servicio '{service}' no reconocido.",
             "valid_services": sorted(_VALID_SERVICES),
@@ -36,6 +48,13 @@ def request_emergency_service(service: str, reason: str, tool_context) -> dict: 
     if not already:
         requested.append({"service": service, "reason": reason, "status": "solicitado"})
         tool_context.state["requested_services"] = requested
+        logger.info(
+            "request_emergency_service: registered service=%s | total_requested=%d",
+            service,
+            len(requested),
+        )
+    else:
+        logger.debug("request_emergency_service: service=%s already requested", service)
 
     return {
         "confirmed": True,
@@ -57,6 +76,7 @@ def get_service_request_status(tool_context) -> dict:  # type: ignore[no-untyped
         dict with the list of requested services and their statuses.
     """
     requested: list[dict] = tool_context.state.get("requested_services", [])
+    logger.debug("get_service_request_status called | total_requested=%d", len(requested))
     return {
         "total": len(requested),
         "services": requested,
@@ -77,21 +97,49 @@ async def log_field_note(note: str, tool_context) -> dict:  # type: ignore[no-un
         dict with the created note record, or an error dict on failure.
     """
     assignment_id = tool_context.state.get("assignment_id")
+    logger.info(
+        "log_field_note called | assignment_id=%s note_len=%d",
+        assignment_id,
+        len(note) if note else 0,
+    )
+
     if not assignment_id:
+        logger.error(
+            "log_field_note: assignment_id missing from session state. state=%s",
+            dict(tool_context.state),
+        )
         return {"error": "assignment_id not found in session state"}
 
     if not note or not note.strip():
+        logger.warning("log_field_note: empty note rejected | assignment_id=%s", assignment_id)
         return {"error": "Note content cannot be empty"}
 
     url = f"{settings.SLATE_API_URL}/api/v1/assignments/{assignment_id}/notes"
     payload = {"content": note.strip(), "created_by_agent": True, "agent_type": "field_guide"}
+    logger.debug("log_field_note: POST %s | payload_len=%d", url, len(note))
 
     try:
+        headers = get_api_headers()
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, json=payload, headers=get_api_headers())
+            response = await client.post(url, json=payload, headers=headers)
+        logger.info(
+            "log_field_note: response status=%s assignment_id=%s",
+            response.status_code,
+            assignment_id,
+        )
         response.raise_for_status()
         return response.json()
     except httpx.HTTPStatusError as exc:
+        logger.error(
+            "log_field_note: HTTP error %s | assignment_id=%s | body=%s",
+            exc.response.status_code,
+            assignment_id,
+            exc.response.text[:200],
+        )
         return {"error": f"API returned {exc.response.status_code}", "assignment_id": assignment_id}
+    except httpx.TimeoutException:
+        logger.error("log_field_note: timeout calling %s", url)
+        return {"error": "Request timed out", "assignment_id": assignment_id}
     except Exception as exc:
+        logger.exception("log_field_note: unexpected error | assignment_id=%s", assignment_id)
         return {"error": str(exc), "assignment_id": assignment_id}

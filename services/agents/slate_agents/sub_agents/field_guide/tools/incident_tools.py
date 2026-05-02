@@ -6,6 +6,9 @@ import httpx
 
 from ....core.config import settings
 from ....core.http_auth import get_api_headers
+from ....core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # ── Incident type procedures ──────────────────────────────────────────────────
 
@@ -78,18 +81,48 @@ async def get_incident_details(tool_context) -> dict:  # type: ignore[no-untyped
         dict with incident details, or an error dict if the request fails.
     """
     incident_id = tool_context.state.get("incident_id")
+    logger.info("get_incident_details called | incident_id=%s", incident_id)
+
     if not incident_id:
+        logger.error(
+            "get_incident_details: incident_id missing from session state. state=%s",
+            dict(tool_context.state),
+        )
         return {"error": "incident_id not found in session state"}
 
     url = f"{settings.SLATE_API_URL}/api/v1/incidents/{incident_id}"
+    logger.debug("get_incident_details: GET %s", url)
+
     try:
+        headers = get_api_headers()
+        logger.debug("get_incident_details: headers keys=%s", list(headers.keys()))
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=get_api_headers())
+            response = await client.get(url, headers=headers)
+        logger.info(
+            "get_incident_details: response status=%s incident_id=%s",
+            response.status_code,
+            incident_id,
+        )
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        logger.debug(
+            "get_incident_details: response body keys=%s",
+            list(data.keys()) if isinstance(data, dict) else type(data),
+        )
+        return data
     except httpx.HTTPStatusError as exc:
+        logger.error(
+            "get_incident_details: HTTP error %s for incident_id=%s | body=%s",
+            exc.response.status_code,
+            incident_id,
+            exc.response.text[:200],
+        )
         return {"error": f"API returned {exc.response.status_code}", "incident_id": incident_id}
+    except httpx.TimeoutException:
+        logger.error("get_incident_details: timeout calling %s", url)
+        return {"error": "Request timed out", "incident_id": incident_id}
     except Exception as exc:
+        logger.exception("get_incident_details: unexpected error | incident_id=%s", incident_id)
         return {"error": str(exc), "incident_id": incident_id}
 
 
@@ -106,11 +139,20 @@ def get_incident_procedures(tool_context) -> dict:  # type: ignore[no-untyped-de
             - note: advisory note if type is unknown
     """
     incident_type = tool_context.state.get("incident_type", "").lower()
+    logger.info("get_incident_procedures called | incident_type=%s", incident_type or "<empty>")
+
     procedures = _PROCEDURES.get(incident_type)
 
     if procedures:
+        logger.debug(
+            "get_incident_procedures: found %d steps for type=%s", len(procedures), incident_type
+        )
         return {"incident_type": incident_type, "procedures": procedures}
 
+    logger.warning(
+        "get_incident_procedures: unknown incident_type=%r — falling back to generic procedures",
+        incident_type,
+    )
     return {
         "incident_type": incident_type or "desconocido",
         "procedures": _DEFAULT_PROCEDURES,

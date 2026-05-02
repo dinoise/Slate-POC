@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from ..core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 def get_current_datetime() -> dict[str, str]:
     """Returns the current date and time in ISO 8601 format (UTC).
@@ -20,12 +24,14 @@ def get_current_datetime() -> dict[str, str]:
     """
     now = datetime.now(tz=UTC)
     weekdays_es = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-    return {
+    result = {
         "iso": now.isoformat(),
         "date": now.date().isoformat(),
         "time": now.strftime("%H:%M"),
         "weekday": weekdays_es[now.weekday()],
     }
+    logger.debug("get_current_datetime: %s", result["iso"])
+    return result
 
 
 def get_session_context(tool_context) -> dict:  # type: ignore[no-untyped-def]
@@ -38,5 +44,12 @@ def get_session_context(tool_context) -> dict:  # type: ignore[no-untyped-def]
     Returns:
         dict with all keys set in initial_state at session creation.
     """
-    # ADK injects tool_context automatically; state is a dict-like object
-    return dict(tool_context.state)
+    state = dict(tool_context.state)
+    logger.info(
+        "get_session_context called | keys=%s | assignment_id=%s incident_id=%s agent_type=%s",
+        list(state.keys()),
+        state.get("assignment_id"),
+        state.get("incident_id"),
+        state.get("agent_type"),
+    )
+    return state

@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     GCS_STAGING_BUCKET: str = ""
 
     # ── Logging ───────────────────────────────────────────────────────────────
-    LOG_LEVEL: str = ""
+    LOG_LEVEL: str = "INFO"
 
     @property
     def is_local(self) -> bool:

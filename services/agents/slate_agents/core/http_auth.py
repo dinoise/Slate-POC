@@ -11,30 +11,39 @@ In local dev (adk web → localhost:8000):
 
 from __future__ import annotations
 
-import logging
-
 from .config import settings
+from .logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def get_api_headers() -> dict[str, str]:
-    """Return HTTP headers for slate-api requests, with Bearer token via ADC.
-
-    Works in both local dev (gcloud auth application-default login) and
-    production (Agent Engine service account). If ADC is not configured,
-    sends without Authorization — slate-api will return 401 in that case.
-    """
+    """Return HTTP headers for slate-api requests, with Bearer token via ADC."""
     headers: dict[str, str] = {"Content-Type": "application/json"}
+    audience = settings.SLATE_API_URL
+
+    logger.debug("get_api_headers: audience=%s", audience or "<EMPTY>")
+
+    if not audience:
+        logger.error(
+            "SLATE_API_URL is not configured — all tool HTTP calls will fail. "
+            "Verify env_vars in Agent Engine deployment."
+        )
+        return headers
 
     try:
         import google.auth.transport.requests
         import google.oauth2.id_token
 
         auth_req = google.auth.transport.requests.Request()
-        token = google.oauth2.id_token.fetch_id_token(auth_req, settings.SLATE_API_URL)
+        token = google.oauth2.id_token.fetch_id_token(auth_req, audience)
         headers["Authorization"] = f"Bearer {token}"
+        logger.debug("ID token fetched successfully for audience=%s", audience)
     except Exception as exc:
-        logger.warning("Could not fetch ID token for slate-api: %s", exc)
+        logger.warning(
+            "ID token fetch failed (audience=%s): %s — sending request without Authorization",
+            audience,
+            exc,
+        )
 
     return headers
