@@ -28,10 +28,7 @@ from google.genai import types
 from .core import get_logger, settings
 from .prompts import ROOT_AGENT_GLOBAL_INSTRUCTION, ROOT_AGENT_PROMPT
 from .sub_agents import (
-    analytics_agent,
-    coordinator_agent,
     field_guide_agent,
-    triage_agent,
 )
 
 logger = get_logger(__name__)
@@ -45,9 +42,9 @@ root_agent = Agent(
     global_instruction=ROOT_AGENT_GLOBAL_INSTRUCTION,
     sub_agents=[
         field_guide_agent,
-        coordinator_agent,
-        triage_agent,
-        analytics_agent,
+        # analytics_agent,
+        # coordinator_agent,
+        # triage_agent,
     ],
     generate_content_config=types.GenerateContentConfig(
         temperature=0.05,
