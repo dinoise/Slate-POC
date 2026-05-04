@@ -14,6 +14,7 @@ Session initial_state must include:
 from __future__ import annotations
 
 from google.adk.agents import Agent
+from google.adk.tools import FunctionTool
 from google.genai import types
 
 from ...core import settings
@@ -73,12 +74,12 @@ Usa ese contexto para personalizar todas tus respuestas.
 5. No hagas preguntas innecesarias — actúa con la información disponible.
 """,
     tools=[
-        get_session_context,
-        get_current_datetime,
-        get_incident_details,
-        get_incident_procedures,
-        request_emergency_service,
-        get_service_request_status,
-        log_field_note,
+        FunctionTool(get_session_context),
+        FunctionTool(get_current_datetime),
+        FunctionTool(get_incident_details),
+        FunctionTool(get_incident_procedures),
+        FunctionTool(request_emergency_service),
+        FunctionTool(get_service_request_status),
+        FunctionTool(log_field_note),
     ],
 )

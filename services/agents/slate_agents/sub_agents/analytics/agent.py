@@ -11,6 +11,7 @@ Session initial_state must include:
 from __future__ import annotations
 
 from google.adk.agents import Agent
+from google.adk.tools import FunctionTool
 
 from ...core import settings
 from ...tools.base_tools import get_current_datetime, get_session_context
@@ -74,11 +75,11 @@ Detecta patrones inusuales proactivamente:
 4. Sé conciso — el despachador está monitoreando operaciones en tiempo real.
 """,
     tools=[
-        get_session_context,
-        get_current_datetime,
-        get_assignment_metrics,
-        get_active_assignments,
-        get_adjuster_availability,
-        get_active_incidents,
+        FunctionTool(get_session_context),
+        FunctionTool(get_current_datetime),
+        FunctionTool(get_assignment_metrics),
+        FunctionTool(get_active_assignments),
+        FunctionTool(get_adjuster_availability),
+        FunctionTool(get_active_incidents),
     ],
 )
