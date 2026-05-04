@@ -85,8 +85,10 @@ async def get_incident_details(tool_context) -> dict:  # type: ignore[no-untyped
 
     if not incident_id:
         logger.error(
-            "get_incident_details: incident_id missing from session state. state=%s",
-            dict(tool_context.state),
+            "get_incident_details: incident_id missing from session state. "
+            "assignment_id=%s agent_type=%s",
+            tool_context.state.get("assignment_id"),
+            tool_context.state.get("agent_type"),
         )
         return {"error": "incident_id not found in session state"}
 

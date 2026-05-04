@@ -44,7 +44,9 @@ def get_session_context(tool_context) -> dict:  # type: ignore[no-untyped-def]
     Returns:
         dict with all keys set in initial_state at session creation.
     """
-    state = dict(tool_context.state)
+    # ADK State is not a plain dict — use _value to safely serialize it
+    raw = tool_context.state
+    state = raw._value if hasattr(raw, "_value") else {}
     logger.info(
         "get_session_context called | keys=%s | assignment_id=%s incident_id=%s agent_type=%s",
         list(state.keys()),

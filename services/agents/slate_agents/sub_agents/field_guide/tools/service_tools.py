@@ -105,8 +105,10 @@ async def log_field_note(note: str, tool_context) -> dict:  # type: ignore[no-un
 
     if not assignment_id:
         logger.error(
-            "log_field_note: assignment_id missing from session state. state=%s",
-            dict(tool_context.state),
+            "log_field_note: assignment_id missing from session state. "
+            "incident_id=%s agent_type=%s",
+            tool_context.state.get("incident_id"),
+            tool_context.state.get("agent_type"),
         )
         return {"error": "assignment_id not found in session state"}
 
