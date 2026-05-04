@@ -196,14 +196,13 @@ watch(
       })
       if (chat.hasSession.value) {
         const parts: string[] = [
-          `Nueva asignación #${assignment.id} activa.`,
-          `Siniestro #${assignment.incident_id}`,
-          incidentMeta.value.type ? `tipo: ${incidentMeta.value.type}` : '',
-          incidentMeta.value.address ? `dirección: ${incidentMeta.value.address}` : '',
-          incidentMeta.value.description ? `descripción: ${incidentMeta.value.description}` : '',
-          'Usa get_incident_details para obtener datos completos y genera el briefing con procedimientos paso a paso.',
+          `[field_guide] Soy el ajustador asignado al siniestro #${assignment.incident_id}.`,
+          incidentMeta.value.type ? `Tipo registrado: ${incidentMeta.value.type}.` : '',
+          incidentMeta.value.address ? `Dirección: ${incidentMeta.value.address}.` : '',
+          incidentMeta.value.description ? `Descripción inicial: ${incidentMeta.value.description}.` : '',
+          'Usa get_incident_details para obtener los datos completos y genera un briefing con los procedimientos paso a paso para este siniestro.',
         ]
-        await chat.sendAutoMessage(parts.filter(Boolean).join('. '))
+        await chat.sendAutoMessage(parts.filter(Boolean).join(' '))
       }
     } else if (!assignment && prev) {
       // Assignment ended: close session
