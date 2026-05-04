@@ -14,6 +14,7 @@ Session initial_state must include:
 from __future__ import annotations
 
 from google.adk.agents import Agent
+from google.genai import types
 
 from ...core import settings
 from ...tools.base_tools import get_current_datetime, get_session_context
@@ -28,6 +29,10 @@ from .tools import (
 field_guide_agent = Agent(
     model=settings.ROOT_AGENT_MODEL,
     name="field_guide",
+    generate_content_config=types.GenerateContentConfig(
+        temperature=0.1,
+        max_output_tokens=2048,
+    ),
     instruction="""
 Eres el Guía de Campo de Slate — asistente especializado para ajustadores durante la atención
 de siniestros en campo. Eres preciso, profesional y orientado a la acción.

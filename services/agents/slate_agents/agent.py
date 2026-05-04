@@ -51,7 +51,7 @@ root_agent = Agent(
     ],
     generate_content_config=types.GenerateContentConfig(
         temperature=0.05,
-        max_output_tokens=512,
+        max_output_tokens=2048,
     ),
 )
 
