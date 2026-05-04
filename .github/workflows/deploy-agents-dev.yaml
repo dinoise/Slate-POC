@@ -135,6 +135,7 @@ jobs:
           ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
           SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
           LOG_LEVEL: "DEBUG"
+          GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY: True
 
       - name: Persist Agent Engine ID to Secret Manager
         if: steps.deploy.outputs.agent_engine_id != ''
