@@ -46,26 +46,31 @@ export function useAgentChat() {
 
   const hasSession = computed(() => sessionId.value !== null)
 
-  async function startSession(context: AgentSessionContext): Promise<void> {
+  /**
+   * Returns true if a NEW session was created, false if an existing one was restored.
+   * Callers should only send the proactive auto-message on new sessions.
+   */
+  async function startSession(context: AgentSessionContext): Promise<boolean> {
     error.value = null
     const stored = localStorage.getItem(sessionKey(context.assignment_id))
     if (stored) {
       sessionId.value = stored
-    } else {
-      isLoading.value = true
-      try {
-        sessionId.value = await agentsApi.createSession('field_guide', context)
-        localStorage.setItem(sessionKey(context.assignment_id), sessionId.value)
-      } catch (e) {
-        error.value = e instanceof Error ? e.message : 'Error al iniciar sesión con el agente'
-        return
-      } finally {
-        isLoading.value = false
-      }
+      await _loadHistoricalNotes(context.assignment_id)
+      return false
     }
 
-    // Load historical notes regardless of whether session was new or restored
-    await _loadHistoricalNotes(context.assignment_id)
+    isLoading.value = true
+    try {
+      sessionId.value = await agentsApi.createSession('field_guide', context)
+      localStorage.setItem(sessionKey(context.assignment_id), sessionId.value)
+      await _loadHistoricalNotes(context.assignment_id)
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Error al iniciar sesión con el agente'
+      return false
+    } finally {
+      isLoading.value = false
+    }
   }
 
   async function _loadHistoricalNotes(assignmentId: number): Promise<void> {

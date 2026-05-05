@@ -186,15 +186,15 @@ watch(
         } catch { /* non-fatal — agent will use get_incident_details tool */ }
       }
 
-      // New assignment: start session and trigger proactive briefing
-      await chat.startSession({
+      // New assignment: start session and trigger proactive briefing only on new sessions
+      const isNewSession = await chat.startSession({
         assignment_id: assignment.id,
         incident_id: assignment.incident_id,
         incident_type: incidentMeta.value.type ?? '',
         incident_description: incidentMeta.value.description ?? '',
         adjuster_id: store.adjuster?.id ?? 0,
       })
-      if (chat.hasSession.value) {
+      if (isNewSession) {
         const parts: string[] = [
           `[field_guide] Soy el ajustador asignado al siniestro #${assignment.incident_id}.`,
           incidentMeta.value.type ? `Tipo registrado: ${incidentMeta.value.type}.` : '',
