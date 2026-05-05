@@ -134,9 +134,14 @@ async def get_assignments_by_incident(
     incident_id: int,
     service: AssignmentServiceDep,
     limit: int = Query(100, ge=1, le=1000),
+    active: bool = Query(False, description="Return only active (non-terminal) assignments"),
 ) -> list[AssignmentRead]:
-    """Get all assignments for a specific incident."""
-    assignments = await service.get_assignments_by_incident(incident_id, limit)
+    """Get assignments for a specific incident.
+
+    Use ?active=true to retrieve only non-terminal assignments — avoids
+    client-side filtering over the full assignment history.
+    """
+    assignments = await service.get_assignments_by_incident(incident_id, limit, active_only=active)
     return [AssignmentRead.model_validate(asgn) for asgn in assignments]
 
 
@@ -149,9 +154,14 @@ async def get_assignments_by_adjuster(
     adjuster_id: int,
     service: AssignmentServiceDep,
     limit: int = Query(100, ge=1, le=1000),
+    active: bool = Query(False, description="Return only active (non-terminal) assignments"),
 ) -> list[AssignmentRead]:
-    """Get all assignments for a specific adjuster."""
-    assignments = await service.get_assignments_by_adjuster(adjuster_id, limit)
+    """Get assignments for a specific adjuster.
+
+    Use ?active=true to retrieve only non-terminal assignments — avoids
+    client-side filtering over the full assignment history.
+    """
+    assignments = await service.get_assignments_by_adjuster(adjuster_id, limit, active_only=active)
     return [AssignmentRead.model_validate(asgn) for asgn in assignments]
 
 

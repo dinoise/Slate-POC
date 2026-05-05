@@ -36,6 +36,18 @@ class AssignmentRepository(BaseRepository[Assignment]):
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def get_active_by_incident(
+        self,
+        incident_id: int,
+    ) -> list[Assignment]:
+        """Get non-terminal assignments for an incident."""
+        query = select(Assignment).where(
+            Assignment.incident_id == incident_id,
+            Assignment.status.in_(ACTIVE_ASSIGNMENT_STATUSES),
+        )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
     async def get_by_adjuster(
         self,
         adjuster_id: int,

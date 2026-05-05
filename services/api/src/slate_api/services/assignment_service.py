@@ -192,16 +192,22 @@ class AssignmentService:
         self,
         incident_id: int,
         limit: int = 100,
+        active_only: bool = False,
     ) -> list[Assignment]:
-        """Get assignments for an incident."""
+        """Get assignments for an incident, optionally filtered to active statuses."""
+        if active_only:
+            return await self.repository.get_active_by_incident(incident_id)
         return await self.repository.get_by_incident(incident_id, limit)
 
     async def get_assignments_by_adjuster(
         self,
         adjuster_id: int,
         limit: int = 100,
+        active_only: bool = False,
     ) -> list[Assignment]:
-        """Get assignments for an adjuster."""
+        """Get assignments for an adjuster, optionally filtered to active statuses."""
+        if active_only:
+            return await self.repository.get_active_by_adjuster(adjuster_id)
         return await self.repository.get_by_adjuster(adjuster_id, limit)
 
     async def get_assignment_history(

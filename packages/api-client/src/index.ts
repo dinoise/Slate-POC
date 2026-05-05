@@ -111,10 +111,14 @@ export const assignmentsApi = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
-  byIncident: (incidentId: number) =>
-    apiFetch<Assignment[]>(`/api/v1/assignments/by-incident/${incidentId}`),
-  byAdjuster: (adjusterId: number) =>
-    apiFetch<Assignment[]>(`/api/v1/assignments/by-adjuster/${adjusterId}`),
+  byIncident: (incidentId: number, options?: { active?: boolean }) => {
+    const qs = options?.active ? '?active=true' : ''
+    return apiFetch<Assignment[]>(`/api/v1/assignments/by-incident/${incidentId}${qs}`)
+  },
+  byAdjuster: (adjusterId: number, options?: { active?: boolean }) => {
+    const qs = options?.active ? '?active=true' : ''
+    return apiFetch<Assignment[]>(`/api/v1/assignments/by-adjuster/${adjusterId}${qs}`)
+  },
   history: (id: number) =>
     apiFetch<AssignmentStatusHistory[]>(`/api/v1/assignments/${id}/history`),
   optimize: (data: { use_db?: boolean; incidents?: unknown[]; adjusters?: unknown[] } = { use_db: true }) =>

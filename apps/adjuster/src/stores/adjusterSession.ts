@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { adjustersApi, assignmentsApi } from '@slate/api-client'
 import type { Adjuster, Assignment } from '@slate/types'
-import { AdjusterStatus, ACTIVE_ASSIGNMENT_STATUSES, TERMINAL_ASSIGNMENT_STATUSES } from '@slate/types'
+import { AdjusterStatus, TERMINAL_ASSIGNMENT_STATUSES } from '@slate/types'
 
 export const useAdjusterSessionStore = defineStore('adjusterSession', () => {
   const adjuster = ref<Adjuster | null>(null)
@@ -31,11 +31,9 @@ export const useAdjusterSessionStore = defineStore('adjusterSession', () => {
 
   async function loadActiveAssignment(id: number) {
     try {
-      const assignments = await assignmentsApi.byAdjuster(id)
-      const active = assignments.find((a) => ACTIVE_ASSIGNMENT_STATUSES.has(a.status))
-      activeAssignment.value = active ?? null
+      const assignments = await assignmentsApi.byAdjuster(id, { active: true })
+      activeAssignment.value = assignments[0] ?? null
     } catch {
-      // No active assignment — silently ignore
       activeAssignment.value = null
     }
   }
