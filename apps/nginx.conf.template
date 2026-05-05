@@ -22,6 +22,14 @@ server {
         add_header Cache-Control "no-store, no-cache, must-revalidate";
     }
 
+    # ── Cache: sin cache para el entry chunk de Vite (index-[hash].js) ──────
+    # El entry chunk cambia en cada deploy. Si el browser lo cachea con
+    # immutable, tras un nuevo deploy sigue referenciando chunks viejos
+    # que ya no existen → "error loading dynamically imported module".
+    location ~* ^/assets/index-[^/]+\.js$ {
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+    }
+
     # ── Cache: cache largo para assets de Vite (nombres con hash) ───────────
     location /assets/ {
         add_header Cache-Control "public, max-age=31536000, immutable";
