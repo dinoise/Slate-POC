@@ -59,12 +59,11 @@ describe('reporterSession store', () => {
     it('sets assignment to the active one when mixed with cancelled', async () => {
       const store = useReporterSessionStore()
       const incident = makeIncident()
-      const cancelled = makeAssignment({ id: 2, status: 'cancelled', assigned_at: '2026-01-01T01:00:00Z' })
       const active = makeAssignment({ id: 1, status: 'assigned', assigned_at: '2026-01-01T00:00:00Z' })
 
       vi.mocked(incidentsApi.get).mockResolvedValue(incident)
-      // cancelled has a later assigned_at — naive sort would pick it
-      vi.mocked(assignmentsApi.byIncident).mockResolvedValue([cancelled, active])
+      // First call: ?active=true → returns only the active assignment
+      vi.mocked(assignmentsApi.byIncident).mockResolvedValueOnce([active])
 
       await store.loadIncident(1)
 
@@ -79,7 +78,10 @@ describe('reporterSession store', () => {
       const newer = makeAssignment({ id: 2, status: 'completed', assigned_at: '2026-01-01T02:00:00Z' })
 
       vi.mocked(incidentsApi.get).mockResolvedValue(incident)
-      vi.mocked(assignmentsApi.byIncident).mockResolvedValue([older, newer])
+      // First call: ?active=true → empty (all terminal)
+      vi.mocked(assignmentsApi.byIncident).mockResolvedValueOnce([])
+      // Second call: full history → fallback to most recent
+      vi.mocked(assignmentsApi.byIncident).mockResolvedValueOnce([older, newer])
 
       await store.loadIncident(1)
 
@@ -89,7 +91,9 @@ describe('reporterSession store', () => {
     it('sets assignment to null when no assignments exist', async () => {
       const store = useReporterSessionStore()
       vi.mocked(incidentsApi.get).mockResolvedValue(makeIncident({ status: 'pending' }))
-      vi.mocked(assignmentsApi.byIncident).mockResolvedValue([])
+      // First call: ?active=true → empty; second call: full history → empty
+      vi.mocked(assignmentsApi.byIncident).mockResolvedValueOnce([])
+      vi.mocked(assignmentsApi.byIncident).mockResolvedValueOnce([])
 
       await store.loadIncident(1)
 
