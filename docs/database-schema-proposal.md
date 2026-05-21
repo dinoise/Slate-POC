@@ -1,4 +1,4 @@
-# Database Schema Proposal — Despacho POC
+# Database Schema Proposal — Slate POC
 
 **Fecha:** 2026-04-10
 **Basado en:** adjuster-optimizer schema actual + investigación de mejores prácticas

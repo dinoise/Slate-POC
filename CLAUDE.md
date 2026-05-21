@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Despacho** — incident dispatch and adjuster assignment system. Monorepo with Python backend services and Vue 3 frontend apps.
+**Slate** — incident dispatch and adjuster assignment system. Monorepo with Python backend services and Vue 3 frontend apps.
 
 ## Package Manager
 

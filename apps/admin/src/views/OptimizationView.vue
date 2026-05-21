@@ -122,7 +122,7 @@ onMounted(async () => {
 
       <!-- Estadísticas de optimización -->
       <Card>
-        <template #title>Métricas de despacho</template>
+        <template #title>Métricas de Slate</template>
         <template #content>
           <div v-if="assignmentsStore.loading" class="loading-inline">
             <ProgressSpinner style="width:28px;height:28px" />
