@@ -8,10 +8,9 @@ from geoalchemy2.functions import ST_GeomFromText, ST_MakePoint, ST_SetSRID
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.adjuster import Adjuster
-from ..models.adjuster_position import AdjusterPosition
-from ..repositories.adjuster_position_repository import AdjusterPositionRepository
+from ..models import Resource, ResourcePosition
 from ..repositories.demand_prediction_repository import DemandPredictionRepository
+from ..repositories.resource_position_repository import ResourcePositionRepository
 from ..schemas.recommendation import (
     RecommendationItem,
     RecommendationRequest,
@@ -133,34 +132,34 @@ def _greedy(
 class PositioningService:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
-        self._pos_repo = AdjusterPositionRepository(db)
+        self._pos_repo = ResourcePositionRepository(db)
         self._demand_repo = DemandPredictionRepository(db)
 
-    async def _seed_initial_scenario(self) -> list[AdjusterPosition]:
-        """Populate scenario='initial' from home_lat/lon of all available adjusters.
+    async def _seed_initial_scenario(self) -> list[ResourcePosition]:
+        """Populate scenario='initial' from home_lat/lon of all available resources.
 
         Called automatically by recommend() when 'initial' has no rows so that
-        the optimizer never fails on first use. Only seeds adjusters whose
-        status is 'available' and is_active is True — busy/offline adjusters
+        the optimizer never fails on first use. Only seeds resources whose
+        status is 'available' and is_active is True — busy/offline resources
         are intentionally excluded because the optimizer only moves available ones.
         """
-        from ..repositories.adjuster_repository import AdjusterRepository
+        from ..repositories.resource_repository import ResourceRepository
 
-        adj_repo = AdjusterRepository(self._db)
-        # get_available() without lat/lon returns all available adjusters
-        rows = await adj_repo.get_available(limit=500)
+        res_repo = ResourceRepository(self._db)
+        # get_available() without lat/lon returns all available resources
+        rows = await res_repo.get_available(limit=500)
         if not rows:
             return []
 
-        new_positions: list[AdjusterPosition] = []
-        for adjuster, _cur_lat, _cur_lon in rows:
-            lat = adjuster.home_latitude
-            lon = adjuster.home_longitude
+        new_positions: list[ResourcePosition] = []
+        for resource, _cur_lat, _cur_lon in rows:
+            lat = resource.home_latitude
+            lon = resource.home_longitude
             h3_r8 = h3.latlng_to_cell(lat, lon, 8)
             wkt = f"POINT({lon} {lat})"
             new_positions.append(
-                AdjusterPosition(
-                    adjuster_id=adjuster.id,
+                ResourcePosition(
+                    resource_id=resource.id,
                     lat=lat,
                     lon=lon,
                     location=ST_GeomFromText(wkt, 4326),
@@ -187,10 +186,10 @@ class PositioningService:
         adj_df = pd.DataFrame(
             [
                 {
-                    "adjuster_id": p.adjuster_id,
-                    "adjuster_name": p.adjuster.full_name
-                    if p.adjuster
-                    else f"Ajustador {p.adjuster_id}",
+                    "adjuster_id": p.resource_id,
+                    "adjuster_name": p.resource.full_name
+                    if p.resource
+                    else f"Resource {p.resource_id}",
                     "lat": p.lat,
                     "lon": p.lon,
                     "h3_r8": p.h3_r8,
@@ -250,18 +249,18 @@ class PositioningService:
     async def _save_recommendations(
         self,
         req: RecommendationRequest,
-        original_positions: list[AdjusterPosition],
+        original_positions: list[ResourcePosition],
         recs: list[dict],
         scenario_name: str,
     ) -> None:
         await self._pos_repo.delete_scenario(scenario_name)
 
-        rec_by_adjuster_id = {r["adjuster_id"]: r for r in recs}
+        rec_by_resource_id = {r["adjuster_id"]: r for r in recs}
 
-        new_positions: list[AdjusterPosition] = []
+        new_positions: list[ResourcePosition] = []
         for orig in original_positions:
-            if orig.adjuster_id in rec_by_adjuster_id:
-                rec = rec_by_adjuster_id[orig.adjuster_id]
+            if orig.resource_id in rec_by_resource_id:
+                rec = rec_by_resource_id[orig.resource_id]
                 lat = rec["recommended_lat"]
                 lon = rec["recommended_lon"]
                 h3_r8 = h3.latlng_to_cell(lat, lon, 8)
@@ -278,8 +277,8 @@ class PositioningService:
 
             wkt = f"POINT({lon} {lat})"
             new_positions.append(
-                AdjusterPosition(
-                    adjuster_id=orig.adjuster_id,
+                ResourcePosition(
+                    resource_id=orig.resource_id,
                     lat=lat,
                     lon=lon,
                     location=ST_GeomFromText(wkt, 4326),
@@ -295,14 +294,14 @@ class PositioningService:
 
         await self._pos_repo.bulk_insert(new_positions)
 
-        # Update home_location on adjusters that moved so that
+        # Update home_location on resources that moved so that
         # GET /adjusters/available/ reflects their new position
         for rec in recs:
             lat = rec["recommended_lat"]
             lon = rec["recommended_lon"]
             await self._db.execute(
-                update(Adjuster)
-                .where(Adjuster.id == rec["adjuster_id"])
+                update(Resource)
+                .where(Resource.id == rec["adjuster_id"])
                 .values(
                     home_latitude=lat,
                     home_longitude=lon,

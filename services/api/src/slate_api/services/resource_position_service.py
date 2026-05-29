@@ -1,10 +1,10 @@
-"""Service for AdjusterPosition business logic."""
+"""Service for ResourcePosition business logic."""
 
-from ..repositories.adjuster_position_repository import AdjusterPositionRepository
+from ..repositories.resource_position_repository import ResourcePositionRepository
 
 
-class AdjusterPositionService:
-    def __init__(self, repo: AdjusterPositionRepository) -> None:
+class ResourcePositionService:
+    def __init__(self, repo: ResourcePositionRepository) -> None:
         self.repo = repo
 
     async def get_scenario(self, scenario: str):
