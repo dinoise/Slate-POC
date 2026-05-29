@@ -1,23 +1,23 @@
 """Pydantic schemas for API request/response."""
 
-from .adjuster import AdjusterCreate, AdjusterRead, AdjusterUpdate
-from .assignment import AssignmentCreate, AssignmentRead, AssignmentUpdate
-from .incident import IncidentCreate, IncidentRead, IncidentUpdate
+from .dispatch import DispatchCreate, DispatchRead, DispatchUpdate
 from .pagination import PaginatedResponse
+from .resource import ResourceCreate, ResourceRead, ResourceUpdate
+from .task import TaskCreate, TaskRead, TaskUpdate
 
 __all__ = [
     # Pagination
     "PaginatedResponse",
-    # Incident
-    "IncidentCreate",
-    "IncidentRead",
-    "IncidentUpdate",
-    # Adjuster
-    "AdjusterCreate",
-    "AdjusterRead",
-    "AdjusterUpdate",
-    # Assignment
-    "AssignmentCreate",
-    "AssignmentRead",
-    "AssignmentUpdate",
+    # Task
+    "TaskCreate",
+    "TaskRead",
+    "TaskUpdate",
+    # Resource
+    "ResourceCreate",
+    "ResourceRead",
+    "ResourceUpdate",
+    # Dispatch
+    "DispatchCreate",
+    "DispatchRead",
+    "DispatchUpdate",
 ]

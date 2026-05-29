@@ -1,20 +1,20 @@
-"""Pydantic schemas for AssignmentNote."""
+"""Pydantic schemas for DispatchNote."""
 
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class AssignmentNoteCreate(BaseModel):
+class DispatchNoteCreate(BaseModel):
     content: str = Field(..., min_length=1, max_length=4000)
     agent_type: str | None = None
 
 
-class AssignmentNoteRead(BaseModel):
+class DispatchNoteRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    assignment_id: int
+    dispatch_id: int
     content: str
     created_by_agent: bool
     agent_type: str | None

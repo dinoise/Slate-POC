@@ -1,15 +1,13 @@
-"""Pydantic schemas for Adjuster model."""
+"""Pydantic schemas for Resource model."""
 
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from ..core.enums import AdjusterStatus
+from ..core.enums import ResourceStatus
 
 
-class AdjusterBase(BaseModel):
-    """Base schema for Adjuster."""
-
+class ResourceBase(BaseModel):
     external_id: str = Field(..., min_length=1, max_length=100)
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
@@ -21,13 +19,11 @@ class AdjusterBase(BaseModel):
     max_cases_per_day: int = Field(default=5, ge=1, le=20)
 
 
-class AdjusterCreate(AdjusterBase):
-    """Schema for creating an Adjuster."""
+class ResourceCreate(ResourceBase):
+    pass
 
 
-class AdjusterUpdate(BaseModel):
-    """Schema for updating an Adjuster."""
-
+class ResourceUpdate(BaseModel):
     first_name: str | None = Field(None, min_length=1, max_length=100)
     last_name: str | None = Field(None, min_length=1, max_length=100)
     email: EmailStr | None = None
@@ -35,26 +31,22 @@ class AdjusterUpdate(BaseModel):
     skills: list[str] | None = None
     max_cases_per_day: int | None = Field(None, ge=1, le=20)
     is_active: bool | None = None
-    status: AdjusterStatus | None = None
+    status: ResourceStatus | None = None
 
 
-class AdjusterRead(AdjusterBase):
-    """Schema for reading an Adjuster."""
-
+class ResourceRead(ResourceBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     is_active: bool
-    status: AdjusterStatus
+    status: ResourceStatus
     created_at: datetime
     updated_at: datetime
     current_latitude: float | None = Field(
         None,
-        description="Current working position latitude from adjuster_positions. "
-        "Populated by /available/ when a scenario is active. "
-        "Falls back to home_latitude when None.",
+        description="Current working position latitude from resource_positions.",
     )
     current_longitude: float | None = Field(
         None,
-        description="Current working position longitude from adjuster_positions.",
+        description="Current working position longitude from resource_positions.",
     )

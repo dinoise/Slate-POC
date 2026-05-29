@@ -1,15 +1,15 @@
-"""Schemas for AdjusterPosition."""
+"""Schemas for ResourcePosition."""
 
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
 
-class AdjusterPositionRead(BaseModel):
+class ResourcePositionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    adjuster_id: int
+    resource_id: int
     lat: float
     lon: float
     h3_r8: str | None
@@ -23,5 +23,4 @@ class AdjusterPositionRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    # Denormalized from adjuster for convenience
-    adjuster_name: str | None = None
+    resource_name: str | None = None

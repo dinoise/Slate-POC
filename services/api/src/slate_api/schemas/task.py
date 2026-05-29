@@ -1,15 +1,13 @@
-"""Pydantic schemas for Incident model."""
+"""Pydantic schemas for Task model."""
 
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..core.enums import IncidentStatus
+from ..core.enums import TaskStatus
 
 
-class IncidentBase(BaseModel):
-    """Base schema for Incident."""
-
+class TaskBase(BaseModel):
     external_id: str = Field(..., min_length=1, max_length=100)
     incident_type: str = Field(..., min_length=1, max_length=50)
     severity: int = Field(..., ge=1, le=5, description="Severity from 1 (low) to 5 (high)")
@@ -21,25 +19,21 @@ class IncidentBase(BaseModel):
     reported_by_user_id: int | None = None
 
 
-class IncidentCreate(IncidentBase):
-    """Schema for creating an Incident."""
+class TaskCreate(TaskBase):
+    pass
 
 
-class IncidentUpdate(BaseModel):
-    """Schema for updating an Incident."""
-
+class TaskUpdate(BaseModel):
     incident_type: str | None = Field(None, min_length=1, max_length=50)
     severity: int | None = Field(None, ge=1, le=5)
     description: str | None = None
-    status: IncidentStatus | None = None
+    status: TaskStatus | None = None
 
 
-class IncidentRead(IncidentBase):
-    """Schema for reading an Incident."""
-
+class TaskRead(TaskBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    status: IncidentStatus
+    status: TaskStatus
     created_at: datetime
     updated_at: datetime
