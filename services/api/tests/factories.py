@@ -8,10 +8,7 @@ from datetime import UTC, datetime
 from geoalchemy2.functions import ST_MakePoint
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from slate_api.models.adjuster import Adjuster
-from slate_api.models.assignment import Assignment
-from slate_api.models.incident import Incident
-from slate_api.models.user import User
+from slate_api.models import Dispatch, Resource, Task, User
 
 # Default coordinates: Mexico City center
 _CDMX_LAT = 19.4326
@@ -34,14 +31,14 @@ async def create_user(db: AsyncSession, **kwargs) -> User:
     return user
 
 
-async def create_adjuster(db: AsyncSession, **kwargs) -> Adjuster:
+async def create_resource(db: AsyncSession, **kwargs) -> Resource:
     lat = kwargs.pop("home_latitude", _CDMX_LAT)
     lon = kwargs.pop("home_longitude", _CDMX_LON)
     defaults: dict = {
         "external_id": str(uuid.uuid4()),
         "first_name": "Carlos",
         "last_name": "García",
-        "email": f"adj-{uuid.uuid4().hex[:8]}@test.com",
+        "email": f"res-{uuid.uuid4().hex[:8]}@test.com",
         "phone": "5559876543",
         "home_latitude": lat,
         "home_longitude": lon,
@@ -52,21 +49,25 @@ async def create_adjuster(db: AsyncSession, **kwargs) -> Adjuster:
         "status": "available",
     }
     defaults.update(kwargs)
-    adjuster = Adjuster(**defaults)
-    db.add(adjuster)
+    resource = Resource(**defaults)
+    db.add(resource)
     await db.flush()
-    await db.refresh(adjuster)
-    return adjuster
+    await db.refresh(resource)
+    return resource
 
 
-async def create_incident(db: AsyncSession, **kwargs) -> Incident:
+# Backward-compat alias used in existing tests
+create_adjuster = create_resource
+
+
+async def create_task(db: AsyncSession, **kwargs) -> Task:
     lat = kwargs.pop("latitude", _CDMX_LAT)
     lon = kwargs.pop("longitude", _CDMX_LON)
     defaults: dict = {
         "external_id": str(uuid.uuid4()),
         "incident_type": "auto",
         "severity": 3,
-        "description": "Test incident",
+        "description": "Test task",
         "latitude": lat,
         "longitude": lon,
         "location": ST_MakePoint(lon, lat),
@@ -75,28 +76,36 @@ async def create_incident(db: AsyncSession, **kwargs) -> Incident:
         "status": "pending",
     }
     defaults.update(kwargs)
-    incident = Incident(**defaults)
-    db.add(incident)
+    task = Task(**defaults)
+    db.add(task)
     await db.flush()
-    await db.refresh(incident)
-    return incident
+    await db.refresh(task)
+    return task
 
 
-async def create_assignment(
+# Backward-compat alias used in existing tests
+create_incident = create_task
+
+
+async def create_dispatch(
     db: AsyncSession,
-    incident: Incident,
-    adjuster: Adjuster,
+    task: Task,
+    resource: Resource,
     **kwargs,
-) -> Assignment:
+) -> Dispatch:
     defaults: dict = {
-        "incident_id": incident.id,
-        "adjuster_id": adjuster.id,
+        "task_id": task.id,
+        "resource_id": resource.id,
         "assigned_at": datetime.now(tz=UTC),
         "status": "assigned",
     }
     defaults.update(kwargs)
-    assignment = Assignment(**defaults)
-    db.add(assignment)
+    dispatch = Dispatch(**defaults)
+    db.add(dispatch)
     await db.flush()
-    await db.refresh(assignment)
-    return assignment
+    await db.refresh(dispatch)
+    return dispatch
+
+
+# Backward-compat alias used in existing tests
+create_assignment = create_dispatch

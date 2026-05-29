@@ -33,7 +33,7 @@ import socket
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from ..repositories.assignment_event_repository import AssignmentEventRepository
+from ..repositories.dispatch_event_repository import DispatchEventRepository
 from .broadcaster import NotificationBroadcaster
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ async def _drain_once(
         broadcaster: Broadcaster instance.
     """
     async with session_maker() as session:
-        repo = AssignmentEventRepository(session)
+        repo = DispatchEventRepository(session)
         async with session.begin():
             events = await repo.get_unprocessed()
             if not events:
@@ -98,12 +98,8 @@ async def _drain_once(
                         if isinstance(event.payload, dict)
                         else json.loads(event.payload)
                     )
-                    incident_id = (
-                        int(payload["incident_id"]) if payload.get("incident_id") else None
-                    )
-                    await broadcaster.broadcast_to_all_channels(
-                        event.adjuster_id, incident_id, payload
-                    )
+                    task_id = int(payload["task_id"]) if payload.get("task_id") else None
+                    await broadcaster.broadcast_to_all_channels(event.resource_id, task_id, payload)
                     processed_ids.append(event.id)
                 except Exception:
                     logger.exception("Outbox: failed to broadcast event id=%d", event.id)

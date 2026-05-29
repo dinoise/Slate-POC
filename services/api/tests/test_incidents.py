@@ -6,7 +6,11 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .conftest import api
-from .factories import create_adjuster, create_assignment, create_incident, create_user
+from .factories import create_dispatch, create_resource, create_task, create_user
+
+create_adjuster = create_resource
+create_incident = create_task
+create_assignment = create_dispatch
 
 _BASE = api("/incidents")
 
@@ -125,15 +129,15 @@ async def test_soft_delete_incident(client: AsyncClient, db_session: AsyncSessio
 async def test_delete_incident_releases_adjuster(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    adjuster = await create_adjuster(db_session, status="busy")
-    incident = await create_incident(db_session, status="assigned")
-    await create_assignment(db_session, incident, adjuster, status="assigned")
+    resource = await create_adjuster(db_session, status="busy")
+    task = await create_incident(db_session, status="assigned")
+    await create_assignment(db_session, task, resource, status="assigned")
 
-    response = await client.delete(f"{_BASE}/{incident.id}")
+    response = await client.delete(f"{_BASE}/{task.id}")
     assert response.status_code == 204
 
-    adj_resp = await client.get(api(f"/adjusters/{adjuster.id}"))
-    assert adj_resp.json()["status"] == "available"
+    res_resp = await client.get(api(f"/adjusters/{resource.id}"))
+    assert res_resp.json()["status"] == "available"
 
 
 # ── Cancel all ────────────────────────────────────────────────────────────────

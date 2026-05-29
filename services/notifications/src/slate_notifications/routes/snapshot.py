@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.auth import verify_google_token
 from ..core.database import get_db
-from ..repositories.assignment_repository import AssignmentRepository
+from ..repositories.dispatch_repository import DispatchRepository
 from ..schemas.notification import EnrichedAssignmentEvent
 from ..services.enricher import Enricher
 
@@ -68,9 +68,9 @@ async def observatory_snapshot(
         ordered by ``assigned_at`` descending.  Empty list when no active
         assignments exist.
     """
-    repo = AssignmentRepository(db)
+    repo = DispatchRepository(db)
     rows = await repo.get_all_active_enriched()
-    logger.info("Observatory snapshot: returning %d active assignments", len(rows))
+    logger.info("Observatory snapshot: returning %d active dispatches", len(rows))
     return [Enricher.build_from_enriched(row) for row in rows]
 
 
@@ -102,8 +102,8 @@ async def incident_snapshot(
         Empty list when the incident has no active assignments (pending
         or fully terminal state).
     """
-    repo = AssignmentRepository(db)
-    rows = await repo.get_by_incident(incident_id)
+    repo = DispatchRepository(db)
+    rows = await repo.get_by_task(incident_id)
     logger.info(
         "Incident snapshot: incident_id=%d, returning %d active assignments",
         incident_id,

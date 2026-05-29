@@ -77,17 +77,10 @@ class ChannelConfig:
 
 CHANNEL_CONFIGS: list[ChannelConfig] = [
     ChannelConfig(
-        pg_channel="assignment_events",
+        pg_channel="dispatch_events",
         targets=[
-            ChannelTarget(channel=Channel.ADJUSTER, id_field="adjuster_id"),
-            ChannelTarget(channel=Channel.INCIDENT, id_field="incident_id"),
+            ChannelTarget(channel=Channel.ADJUSTER, id_field="resource_id"),
+            ChannelTarget(channel=Channel.INCIDENT, id_field="task_id"),
         ],
     ),
-    # Future example:
-    # ChannelConfig(
-    #     pg_channel="adjuster_events",
-    #     targets=[
-    #         ChannelTarget(channel=Channel.ADJUSTER_STATUS, id_field="adjuster_id"),
-    #     ],
-    # ),
 ]

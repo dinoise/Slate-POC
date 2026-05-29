@@ -31,7 +31,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..repositories.assignment_repository import AssignmentRepository, EnrichedAssignment
+from ..repositories.dispatch_repository import DispatchRepository, EnrichedDispatch
 from ..schemas.notification import (
     AdjusterInfo,
     EnrichedAssignmentEvent,
@@ -54,11 +54,11 @@ class Enricher:
     """
 
     def __init__(self, db: AsyncSession) -> None:
-        self._repo = AssignmentRepository(db)
+        self._repo = DispatchRepository(db)
 
     @staticmethod
     def build_from_enriched(
-        enriched: EnrichedAssignment,
+        enriched: EnrichedDispatch,
         event_type: str = "assignment.updated",
     ) -> EnrichedAssignmentEvent:
         """Build an ``EnrichedAssignmentEvent`` from a pre-joined DB projection.
@@ -85,14 +85,14 @@ class Enricher:
                 traffic_segments=enriched.route_traffic_segments,
             )
         return EnrichedAssignmentEvent(
-            assignment_id=enriched.assignment_id,
+            assignment_id=enriched.dispatch_id,
             status=enriched.status,
             event_type=event_type,
             distance_km=enriched.distance_km,
             travel_time_minutes=enriched.travel_time_minutes,
             assigned_at=enriched.assigned_at,
             incident=IncidentInfo(
-                id=enriched.incident_id,
+                id=enriched.task_id,
                 type=enriched.incident_type,
                 severity=enriched.severity,
                 description=enriched.description,
@@ -101,9 +101,9 @@ class Enricher:
                 longitude=enriched.longitude,
             ),
             adjuster=AdjusterInfo(
-                id=enriched.adjuster_id,
-                latitude=enriched.adjuster_lat,
-                longitude=enriched.adjuster_lon,
+                id=enriched.resource_id,
+                latitude=enriched.resource_lat,
+                longitude=enriched.resource_lon,
             ),
             route=route,
         )
@@ -125,7 +125,7 @@ class Enricher:
             JSON serialisation and SSE delivery.
         """
         try:
-            enriched = await self._repo.get_enriched(int(payload["assignment_id"]))
+            enriched = await self._repo.get_enriched(int(payload["dispatch_id"]))
             if enriched is not None:
                 return self.build_from_enriched(
                     enriched,
@@ -133,12 +133,11 @@ class Enricher:
                 )
         except Exception:
             logger.exception(
-                "Enrichment failed for assignment_id=%s — falling back to raw payload",
-                payload.get("assignment_id"),
+                "Enrichment failed for dispatch_id=%s — falling back to raw payload",
+                payload.get("dispatch_id"),
             )
 
-        # Fallback: build from raw payload fields (no incident/adjuster join).
-        # adjuster is omitted (None) since home coords are not in the pg_notify payload.
+        # Fallback: build from raw payload fields (no task/resource join).
         raw_polyline = payload.get("route_polyline")
         route = None
         if raw_polyline is not None:
@@ -150,14 +149,14 @@ class Enricher:
                 traffic_segments=payload.get("route_traffic_segments"),
             )
         return EnrichedAssignmentEvent(
-            assignment_id=int(payload["assignment_id"]),
+            assignment_id=int(payload["dispatch_id"]),
             status=payload["status"],
             event_type=payload.get("event", "assignment.updated"),
             distance_km=payload.get("distance_km"),
             travel_time_minutes=payload.get("travel_time_minutes"),
             assigned_at=payload.get("assigned_at"),
             incident=IncidentInfo(
-                id=int(payload.get("incident_id", 0)),
+                id=int(payload.get("task_id", 0)),
                 type=payload.get("incident_type", "unknown"),
                 severity=int(payload.get("severity", 0)),
                 description=payload.get("description"),
