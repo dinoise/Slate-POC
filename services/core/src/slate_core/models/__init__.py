@@ -1,27 +1,27 @@
 """Shared SQLAlchemy models for all Slate services."""
 
-from .adjuster import Adjuster
-from .adjuster_position import AdjusterPosition
-from .assignment import Assignment
-from .assignment_event import AssignmentEvent
-from .assignment_note import AssignmentNote
-from .assignment_status_history import AssignmentStatusHistory
 from .base import Base, BaseModel, TimestampMixin
 from .demand_prediction import DemandPrediction
-from .incident import Incident
+from .dispatch import Dispatch
+from .dispatch_event import DispatchEvent
+from .dispatch_note import DispatchNote
+from .dispatch_status_history import DispatchStatusHistory
+from .resource import Resource
+from .resource_position import ResourcePosition
+from .task import Task
 from .user import User
 
 __all__ = [
     "Base",
     "BaseModel",
     "TimestampMixin",
-    "Adjuster",
-    "AdjusterPosition",
-    "Assignment",
-    "AssignmentEvent",
-    "AssignmentNote",
-    "AssignmentStatusHistory",
+    "Task",
+    "Resource",
+    "ResourcePosition",
+    "Dispatch",
+    "DispatchEvent",
+    "DispatchNote",
+    "DispatchStatusHistory",
     "DemandPrediction",
-    "Incident",
     "User",
 ]
