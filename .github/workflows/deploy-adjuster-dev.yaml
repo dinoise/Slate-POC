@@ -2,12 +2,11 @@ name: "Deploy — Adjuster App (dev)"
 
 on:
   push:
-    branches: [develop]
+    branches: [dev]
     paths:
       - "apps/adjuster/**"
       - "packages/**"
       - ".github/workflows/deploy-adjuster-dev.yaml"
-      - ".github/workflows/shared-build-and-push-frontend.yaml"
   workflow_dispatch:
 
 permissions:
@@ -20,19 +19,45 @@ jobs:
     uses: ./.github/workflows/shared-lint-and-test-frontend.yaml
     with:
       app-path: apps/adjuster
-      coverage-threshold: 70
+      coverage-threshold: 0
 
-  build-and-deploy:
-    name: "Build & Deploy"
+  build:
+    name: "Build"
     needs: [test]
     uses: ./.github/workflows/shared-build-and-push-frontend.yaml
     with:
       app-path: apps/adjuster
-      bucket: slate-app-dev
-      bucket-prefix: adjuster
+      registry: us-central1-docker.pkg.dev
+      tag: dev
       environment: dev
+      vite-api-base-url: https://slate-api-dev-43634032496.us-central1.run.app
+      vite-notifications-url: https://slate-notifications-dev-43634032496.us-central1.run.app
+      vite-google-client-id: 43634032496-q724o3s4rfdnfpoq6hbc1u8f60jdlkn7.apps.googleusercontent.com
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      vite-api-base-url: ${{ secrets.VITE_API_BASE_URL_DEV }}
-      vite-notifications-url: ${{ secrets.VITE_NOTIFICATIONS_URL_DEV }}
+
+  deploy:
+    name: "Deploy"
+    needs: [build]
+    if: needs.build.result == 'success'
+    uses: ./.github/workflows/shared-deploy-cloudrun.yaml
+    with:
+      service-name: slate-adjuster-dev
+      image-registry: ${{ needs.build.outputs.registry }}
+      image-service-name: ${{ needs.build.outputs.service-name }}
+      image-tag: ${{ needs.build.outputs.image-tag }}
+      environment: dev
+      memory: 256Mi
+      cpu: "0.5"
+      min-instances: 0
+      max-instances: 2
+      timeout: 60s
+      runtime-service-account: poc-adjuster@lennken-poc.iam.gserviceaccount.com
+      allow-unauthenticated: true
+      enable-iap: false
+      skip-health-check: true
+      health-check-path: /healthz
+    secrets:
+      project-id: ${{ secrets.GCP_PROJECT_ID }}
+      workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}

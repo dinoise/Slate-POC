@@ -1,4 +1,5 @@
 """Google Routes API v2 routing provider implementation."""
+
 from __future__ import annotations
 
 import logging
@@ -112,12 +113,8 @@ class GoogleRoutesProvider(RoutingProvider):
             httpx.HTTPStatusError: On non-2xx HTTP responses.
         """
         body = {
-            "origins": [
-                {"waypoint": _waypoint(lat, lon)} for lat, lon in sources
-            ],
-            "destinations": [
-                {"waypoint": _waypoint(lat, lon)} for lat, lon in destinations
-            ],
+            "origins": [{"waypoint": _waypoint(lat, lon)} for lat, lon in sources],
+            "destinations": [{"waypoint": _waypoint(lat, lon)} for lat, lon in destinations],
             "travelMode": "DRIVE",
             "routingPreference": self._routing_preference,
         }
@@ -162,10 +159,10 @@ class GoogleRoutesProvider(RoutingProvider):
                     matrix[i, j] = duration_s
 
         unreachable = int(np.isinf(matrix).sum())
-        
+
         if unreachable > 0:
             # Encontrar los pares que quedaron inf
-            failed_pairs = list(zip(*np.where(np.isinf(matrix))))
+            failed_pairs = list(zip(*np.where(np.isinf(matrix)), strict=False))
             logger.warning(f"Unreachable pairs: {failed_pairs}")
 
         logger.debug(
@@ -229,8 +226,7 @@ class GoogleRoutesProvider(RoutingProvider):
         routes = data.get("routes") or []
         if not routes:
             raise ValueError(
-                f"Google Routes returned no routes for "
-                f"({olat},{olon}) → ({dlat},{dlon}): {data}"
+                f"Google Routes returned no routes for ({olat},{olon}) → ({dlat},{dlon}): {data}"
             )
 
         best = routes[0]
@@ -252,11 +248,13 @@ class GoogleRoutesProvider(RoutingProvider):
                 speed = interval.get("speed", "NORMAL")
                 if speed not in ("NORMAL", "SLOW", "TRAFFIC_JAM"):
                     speed = "NORMAL"
-                traffic_segments.append(TrafficSegment(
-                    start_index=interval.get("startPolylinePointIndex", 0),
-                    end_index=interval.get("endPolylinePointIndex", 0),
-                    speed=speed,
-                ))
+                traffic_segments.append(
+                    TrafficSegment(
+                        start_index=interval.get("startPolylinePointIndex", 0),
+                        end_index=interval.get("endPolylinePointIndex", 0),
+                        speed=speed,
+                    )
+                )
 
         return RouteResult(
             duration_s=duration_s,

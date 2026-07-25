@@ -2,7 +2,7 @@
   "name": "slate",
   "private": true,
   "version": "0.1.0",
-  "description": "Despacho monorepo — incident dispatch and adjuster assignment",
+  "description": "Slate monorepo — incident dispatch and adjuster assignment",
   "scripts": {
     "dev:admin": "pnpm --filter @slate/admin dev",
     "dev:reporter": "pnpm --filter @slate/reporter dev",

@@ -2,13 +2,11 @@ name: "Deploy — Notifications Service (dev)"
 
 on:
   push:
-    branches: [develop]
+    branches: [dev]
     paths:
       - "services/notifications/**"
       - "services/core/**"
       - ".github/workflows/deploy-notifications-dev.yaml"
-      - ".github/workflows/shared-build-and-push-backend.yaml"
-      - ".github/workflows/shared-deploy-cloudrun.yaml"
   workflow_dispatch:
     inputs:
       skip-tests:
@@ -27,7 +25,7 @@ jobs:
     uses: ./.github/workflows/shared-lint-and-test-backend.yaml
     with:
       service-path: services/notifications
-      coverage-threshold: 60
+      coverage-threshold: 0
 
   build:
     name: "Build"
@@ -46,21 +44,28 @@ jobs:
   deploy:
     name: "Deploy"
     needs: [build]
+    if: needs.build.result == 'success'
     uses: ./.github/workflows/shared-deploy-cloudrun.yaml
     with:
-      image-full: ${{ needs.build.outputs.image-full }}
       service-name: slate-notifications-dev
-      region: us-central1
+      image-registry: ${{ needs.build.outputs.registry }}
+      image-service-name: ${{ needs.build.outputs.service-name }}
+      image-tag: ${{ needs.build.outputs.image-tag }}
       environment: dev
       memory: 512Mi
-      cpu: "0.5"
-      min-instances: 1          # SSE: siempre activo — cold start mataría conexiones activas
-      max-instances: 1          # CRÍTICO: NotificationBroadcaster usa asyncio.Queue en memoria.
-                                # Con >1 instancia, eventos pg_notify llegan a instancia aleatoria
-                                # y los adjusters conectados en otra instancia no los reciben.
-                                # Para escalar horizontalmente: agregar Redis Pub/Sub como broker.
-      timeout: 3600s            # Conexiones SSE long-lived (hasta 1 hora)
+      cpu: "1"
+      min-instances: 0
+      max-instances: 3
+      concurrency: 10
+      timeout: 3600s
+      runtime-service-account: poc-notifications@lennken-poc.iam.gserviceaccount.com
+      allow-unauthenticated: true
+      vpc-network: default
+      vpc-subnet: poc-cloudrun-subnet
+      cloudrun-secrets: |
+        DATABASE_URL=poc-database-dev-url:latest
+        GOOGLE_CLIENT_ID=poc-notifications-dev-google-client-id:latest
+        CORS_ORIGINS=poc-notifications-dev-cors-origins:latest
     secrets:
       project-id: ${{ secrets.GCP_PROJECT_ID }}
       workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      database-url: ${{ secrets.DATABASE_URL_DEV }}

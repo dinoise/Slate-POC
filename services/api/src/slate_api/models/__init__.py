@@ -1,20 +1,31 @@
-"""Database models."""
-from .adjuster import Adjuster
-from .adjuster_position import AdjusterPosition
-from .assignment import Assignment
-from .base import Base, BaseModel, TimestampMixin
-from .demand_prediction import DemandPrediction
-from .incident import Incident
-from .user import User
+"""Database models — re-exported from slate_core.models."""
+
+from slate_core.models import (
+    Base,
+    BaseModel,
+    DemandPrediction,
+    Dispatch,
+    DispatchEvent,
+    DispatchNote,
+    DispatchStatusHistory,
+    Resource,
+    ResourcePosition,
+    Task,
+    TimestampMixin,
+    User,
+)
 
 __all__ = [
     "Base",
     "BaseModel",
     "TimestampMixin",
-    "Incident",
-    "Adjuster",
-    "Assignment",
+    "Task",
+    "Resource",
+    "ResourcePosition",
+    "Dispatch",
+    "DispatchEvent",
+    "DispatchNote",
+    "DispatchStatusHistory",
     "DemandPrediction",
-    "AdjusterPosition",
     "User",
 ]

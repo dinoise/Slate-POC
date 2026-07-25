@@ -3,8 +3,16 @@ name: "[Shared] Deploy — Cloud Run"
 on:
   workflow_call:
     inputs:
-      image-full:
-        description: "Imagen completa con tag, e.g. us-central1-docker.pkg.dev/proj/slate/api:dev-abc1234-1234567890"
+      image-registry:
+        description: "Registry base, e.g. us-central1-docker.pkg.dev"
+        required: true
+        type: string
+      image-service-name:
+        description: "Nombre del servicio en Artifact Registry (basename del service-path)"
+        required: true
+        type: string
+      image-tag:
+        description: "Tag de la imagen, e.g. dev-abc1234-1234567890"
         required: true
         type: string
       service-name:
@@ -35,6 +43,11 @@ on:
         required: false
         type: number
         default: 5
+      concurrency:
+        description: "Número máximo de solicitudes simultáneas por instancia (1-1000). Bajar este valor para SSE de larga duración."
+        required: false
+        type: number
+        default: 1
       timeout:
         required: false
         type: string
@@ -42,19 +55,68 @@ on:
       allow-unauthenticated:
         required: false
         type: boolean
-        default: true
-      run-migrations:
-        description: "Ejecutar alembic upgrade head antes del deploy"
+        default: false
+      runtime-service-account:
+        description: "Service account que ejecuta el contenedor (runtime). Si se omite, usa la SA por defecto del proyecto."
+        required: false
+        type: string
+        default: ""
+      vpc-network:
+        description: "Nombre de la VPC para Direct VPC Egress (e.g. default). Omitir si no se necesita VPC."
+        required: false
+        type: string
+        default: ""
+      vpc-subnet:
+        description: "Nombre del subnet para Direct VPC Egress (e.g. poc-cloudrun-subnet)."
+        required: false
+        type: string
+        default: ""
+      vpc-egress:
+        description: "Modo de egress VPC: all-traffic | private-ranges-only"
+        required: false
+        type: string
+        default: "private-ranges-only"
+      enable-iap:
+        description: "Configurar el IAM binding para el service agent de IAP (roles/run.invoker). Requiere que IAP esté activado previamente en el servicio desde GCP Console."
         required: false
         type: boolean
         default: false
+      skip-health-check:
+        description: "Omitir el health check post-deploy (útil cuando IAP impide llamadas programáticas)"
+        required: false
+        type: boolean
+        default: false
+      health-check-path:
+        description: "Path del health check, e.g. /health o /healthz"
+        required: false
+        type: string
+        default: "/health"
+      cloudrun-secrets:
+        description: |
+          Secrets de GCP Secret Manager a montar como env vars en el contenedor.
+          Formato multilínea (un par por línea): ENV_VAR=gcp-secret-name:version
+          Convención de nombres: poc-{recurso}-{env}-{proposito}
+          Ejemplo:
+            DATABASE_URL=poc-database-dev-url:latest
+            SECRET_KEY=poc-api-dev-secret-key:latest
+        required: false
+        type: string
+        default: ""
+      cloudrun-env-vars:
+        description: |
+          Variables de entorno planas (no sensitivas) para el contenedor.
+          Formato multilínea (un par por línea): KEY=value
+          Ejemplo:
+            CORS_ORIGINS=https://app.example.com,https://admin.example.com
+            VITE_API_BASE_URL=https://api.example.com
+        required: false
+        type: string
+        default: ""
     secrets:
       project-id:
         required: true
       workload-identity-provider:
         required: true
-      database-url:
-        required: false
     outputs:
       service-url:
         value: ${{ jobs.deploy.outputs.service-url }}
@@ -80,42 +142,77 @@ jobs:
         with:
           project_id: ${{ secrets.project-id }}
 
-      - name: Ejecutar migraciones Alembic
-        if: inputs.run-migrations && secrets.database-url != ''
-        run: |
-          echo "🗄️ Ejecutando migraciones..."
-          uv run alembic upgrade head
-        env:
-          DATABASE_URL: ${{ secrets.database-url }}
-
       - name: Deploy a Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ inputs.service-name }}
-          image: ${{ inputs.image-full }}
+          image: ${{ inputs.image-registry }}/${{ secrets.project-id }}/poc-images/${{ inputs.image-service-name }}:${{ inputs.image-tag }}
           region: ${{ inputs.region }}
+          secrets: ${{ inputs.cloudrun-secrets }}
+          env_vars: |
+            ENVIRONMENT=${{ inputs.environment }}
+            ${{ inputs.cloudrun-env-vars }}
           flags: >-
             --memory=${{ inputs.memory }}
             --cpu=${{ inputs.cpu }}
             --min-instances=${{ inputs.min-instances }}
             --max-instances=${{ inputs.max-instances }}
+            --concurrency=${{ inputs.concurrency }}
             --timeout=${{ inputs.timeout }}
-            --set-env-vars=ENVIRONMENT=${{ inputs.environment }}
             ${{ inputs.allow-unauthenticated && '--allow-unauthenticated' || '--no-allow-unauthenticated' }}
+            ${{ inputs.runtime-service-account != '' && format('--service-account={0}', inputs.runtime-service-account) || '' }}
+            ${{ inputs.vpc-network != '' && format('--network={0} --subnet={1} --vpc-egress={2}', inputs.vpc-network, inputs.vpc-subnet, inputs.vpc-egress) || '' }}
+
+      - name: Configurar IAM binding para IAP
+        if: inputs.enable-iap
+        run: |
+          PROJECT_NUMBER=$(gcloud projects describe ${{ secrets.project-id }} \
+            --format="value(projectNumber)")
+          IAP_SA="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-iap.iam.gserviceaccount.com"
+          echo "🔐 Asignando roles/run.invoker a ${IAP_SA}"
+          gcloud run services add-iam-policy-binding ${{ inputs.service-name }} \
+            --member="${IAP_SA}" \
+            --role="roles/run.invoker" \
+            --region=${{ inputs.region }} \
+            --project=${{ secrets.project-id }}
+          echo "✅ IAP service agent configurado"
 
       - name: Health check
+        if: ${{ !inputs.skip-health-check && !inputs.enable-iap }}
         run: |
           SERVICE_URL="${{ steps.deploy.outputs.url }}"
-          echo "🔍 Health check → ${SERVICE_URL}/health"
+          SERVICE_URL="${SERVICE_URL%/}"
+          echo "🔍 Health check → ${SERVICE_URL}${{ inputs.health-check-path }}"
+
+          # Autenticación según el modo de acceso del servicio:
+          # - enable-iap=true : IAP intercepta, requiere cookie de usuario — no soportado en CI, skip auth
+          # - allow-unauthenticated=false : Cloud Run IAM valida Bearer token directamente
+          # - allow-unauthenticated=true : sin autenticación
+          # WIF requiere impersonación: roles/iam.serviceAccountTokenCreator + roles/run.invoker en poc-deployer.
+          [ "${{ inputs.allow-unauthenticated }}" = "false" ] \
+            && AUTH_HEADER="Authorization: Bearer $(gcloud auth print-identity-token \
+                --impersonate-service-account="poc-deployer@${{ secrets.project-id }}.iam.gserviceaccount.com" \
+                --audiences="${SERVICE_URL}" \
+                --include-email)" \
+            && echo "🔐 Modo IAM — audience: ${SERVICE_URL}" \
+            || echo "🔓 Sin autenticación requerida"
+
           MAX_ATTEMPTS=5
           ATTEMPT=1
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            if curl -sf "${SERVICE_URL}/health" > /dev/null 2>&1; then
-              echo "✅ Health check OK (intento ${ATTEMPT})"
+            RESPONSE=$(curl -si \
+              ${AUTH_HEADER:+-H "${AUTH_HEADER}"} \
+              "${SERVICE_URL}${{ inputs.health-check-path }}" 2>&1)
+            HTTP_CODE=$(echo "${RESPONSE}" | grep -m1 "^HTTP" | awk '{print $2}')
+            if [ "${HTTP_CODE}" = "200" ]; then
+              echo "✅ Health check OK (intento ${ATTEMPT}) — HTTP ${HTTP_CODE}"
               exit 0
             fi
-            echo "⏳ Intento ${ATTEMPT}/${MAX_ATTEMPTS} fallido — esperando 5s..."
+            echo "⏳ Intento ${ATTEMPT}/${MAX_ATTEMPTS} fallido — HTTP ${HTTP_CODE}"
+            echo "── Response ──"
+            echo "${RESPONSE}"
+            echo "──────────────"
             sleep 5
             ATTEMPT=$((ATTEMPT + 1))
           done
@@ -131,7 +228,7 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "${EMOJI} Deploy ${{ inputs.service-name }} — ${STATUS}"
           echo "🔗 URL: ${{ steps.deploy.outputs.url }}"
-          echo "🐳 Image: ${{ inputs.image-full }}"
+          echo "🐳 Image: ${{ inputs.image-registry }}/${{ secrets.project-id }}/poc-images/${{ inputs.image-service-name }}:${{ inputs.image-tag }}"
           echo "🌿 Branch: ${{ github.ref_name }}"
           echo "👤 Actor: ${{ github.actor }}"
           echo "🔖 Commit: ${{ github.sha }}"

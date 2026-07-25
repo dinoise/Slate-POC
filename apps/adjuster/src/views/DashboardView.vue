@@ -1,0 +1,480 @@
+<script setup lang="ts">
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
+import * as L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import 'leaflet-ant-path'
+import { useSSE, useAgentChat } from '@slate/composables'
+import { useRoute } from '@slate/composables'
+import { useAdjusterSessionStore } from '@/stores/adjusterSession'
+import { incidentsApi } from '@slate/api-client'
+import AdjusterSelector from '@/components/AdjusterSelector.vue'
+import AssignmentCard from '@/components/AssignmentCard.vue'
+import NewAssignmentBanner from '@/components/NewAssignmentBanner.vue'
+import AgentPanel from '@/components/agent/AgentPanel.vue'
+import type { AssignmentEvent } from '@slate/types'
+import { AssignmentStatus } from '@slate/types'
+
+const store = useAdjusterSessionStore()
+const { buildRouteLayer, removeRouteLayer, fetchRoute, routeFromPayload } = useRoute()
+const chat = useAgentChat()
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+const mapContainer = ref<HTMLElement>()
+let map: L.Map | null = null
+let adjusterMarker: L.Marker | null = null
+let incidentMarker: L.Marker | null = null
+let routeLayer: L.Layer | null = null
+let routeColorIndex = 0
+
+const adjIcon = L.divIcon({
+  html: '<div style="font-size:26px;line-height:1;">🔵</div>',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+  className: '',
+})
+const incIcon = L.divIcon({
+  html: '<div style="font-size:26px;line-height:1;">🔴</div>',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+  className: '',
+})
+
+onMounted(() => {
+  if (!mapContainer.value) return
+  map = L.map(mapContainer.value).setView([19.4326, -99.1332], 11)
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CartoDB',
+    maxZoom: 19,
+  }).addTo(map)
+})
+
+onUnmounted(() => {
+  map?.remove()
+  map = null
+})
+
+function clearMap() {
+  if (!map) return
+  if (adjusterMarker) { map.removeLayer(adjusterMarker); adjusterMarker = null }
+  if (incidentMarker) { map.removeLayer(incidentMarker); incidentMarker = null }
+  if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+}
+
+async function drawRoute(
+  adjLat: number, adjLon: number,
+  incLat: number, incLon: number,
+) {
+  if (!map) return
+  if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+
+  try {
+    const result = await fetchRoute(adjLat, adjLon, incLat, incLon)
+    if (!map) return
+    routeLayer = buildRouteLayer(L, result.coords, result.traffic_segments, routeColorIndex++)
+    routeLayer!.addTo(map)
+    const bounds = (routeLayer as L.Polyline).getBounds?.()
+    if (bounds?.isValid()) map.fitBounds(bounds, { padding: [40, 40] })
+  } catch {
+    // Fallback: straight dashed line
+    if (!map) return
+    routeLayer = L.polyline([[adjLat, adjLon], [incLat, incLon]], {
+      color: '#f59e0b', weight: 3, dashArray: '8 8',
+    }).addTo(map)
+    map.fitBounds((routeLayer as L.Polyline).getBounds(), { padding: [40, 40] })
+  }
+}
+
+// ── React to adjuster selection ───────────────────────────────────────────────
+watch(
+  () => store.adjuster,
+  (adj) => {
+    clearMap()
+    if (!adj || !map) return
+    const adjLat = adj.current_latitude ?? adj.home_latitude
+    const adjLon = adj.current_longitude ?? adj.home_longitude
+    if (adjLat && adjLon) {
+      adjusterMarker = L.marker([adjLat, adjLon], { icon: adjIcon })
+        .bindTooltip(`${adj.first_name} ${adj.last_name}`, { permanent: false })
+        .addTo(map)
+      map.setView([adjLat, adjLon], 13)
+    }
+  },
+)
+
+// ── React to active assignment ────────────────────────────────────────────────
+// Holds enriched incident info from SSE or initial load
+const incidentMeta = ref<{
+  type: string | null
+  description: string | null
+  address: string | null
+  lat: number | null
+  lon: number | null
+  severity: number | null
+}>({ type: null, description: null, address: null, lat: null, lon: null, severity: null })
+
+watch(
+  () => store.activeAssignment,
+  async (assignment) => {
+    if (!map || !assignment) {
+      if (incidentMarker && map) { map.removeLayer(incidentMarker); incidentMarker = null }
+      if (routeLayer && map) { removeRouteLayer(map, routeLayer); routeLayer = null }
+      return
+    }
+    // If incidentMeta is not yet populated (REST load, no SSE yet), fetch the incident
+    if (!incidentMeta.value.lat) {
+      try {
+        const incident = await incidentsApi.get(assignment.incident_id)
+        incidentMeta.value = {
+          type: incident.incident_type,
+          description: incident.description,
+          address: incident.address,
+          lat: incident.latitude,
+          lon: incident.longitude,
+          severity: incident.severity,
+        }
+      } catch {
+        return
+      }
+    }
+
+    const adj = store.adjuster
+    const { lat, lon } = incidentMeta.value
+    if (!adj || !lat || !lon) return
+
+    // Place incident marker
+    if (incidentMarker) map.removeLayer(incidentMarker)
+    incidentMarker = L.marker([lat, lon], { icon: incIcon })
+      .bindTooltip(incidentMeta.value.type ?? 'Siniestro')
+      .addTo(map)
+
+    // Draw route — prefer stored polyline to avoid an extra API call
+    const adjLat = adj.current_latitude ?? adj.home_latitude
+    const adjLon = adj.current_longitude ?? adj.home_longitude
+    if (adjLat && adjLon) {
+      if (assignment.route_polyline) {
+        if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+        const result = routeFromPayload(assignment.route_polyline, assignment.route_distance_m, assignment.route_duration_s, assignment.route_traffic_segments)
+        routeLayer = buildRouteLayer(L, result.coords, result.traffic_segments, routeColorIndex++)
+        routeLayer!.addTo(map)
+        const bounds = (routeLayer as L.Polyline).getBounds?.()
+        if (bounds?.isValid()) map.fitBounds(bounds, { padding: [40, 40] })
+      } else {
+        await drawRoute(adjLat, adjLon, lat, lon)
+      }
+    }
+  },
+)
+
+// ── Agent session lifecycle ───────────────────────────────────────────────────
+watch(
+  () => store.activeAssignment,
+  async (assignment, prev) => {
+    if (assignment && !prev) {
+      // Ensure incidentMeta is populated before starting the agent session.
+      // On SSE-triggered assignments it may still be empty — fetch from API.
+      if (!incidentMeta.value.type) {
+        try {
+          const incident = await incidentsApi.get(assignment.incident_id)
+          incidentMeta.value = {
+            type: incident.incident_type,
+            description: incident.description,
+            address: incident.address,
+            lat: incident.latitude,
+            lon: incident.longitude,
+            severity: incident.severity,
+          }
+        } catch { /* non-fatal — agent will use get_incident_details tool */ }
+      }
+
+      // New assignment: start session and trigger proactive briefing only on new sessions
+      const isNewSession = await chat.startSession({
+        assignment_id: assignment.id,
+        incident_id: assignment.incident_id,
+        incident_type: incidentMeta.value.type ?? '',
+        incident_description: incidentMeta.value.description ?? '',
+        adjuster_id: store.adjuster?.id ?? 0,
+      })
+      if (isNewSession) {
+        const parts: string[] = [
+          `[field_guide] Soy el ajustador asignado al siniestro #${assignment.incident_id}.`,
+          incidentMeta.value.type ? `Tipo registrado: ${incidentMeta.value.type}.` : '',
+          incidentMeta.value.address ? `Dirección: ${incidentMeta.value.address}.` : '',
+          incidentMeta.value.description ? `Descripción inicial: ${incidentMeta.value.description}.` : '',
+          'Usa get_incident_details para obtener los datos completos y genera un briefing con los procedimientos paso a paso para este siniestro.',
+        ]
+        await chat.sendAutoMessage(parts.filter(Boolean).join(' '))
+      }
+    } else if (!assignment && prev) {
+      // Assignment ended: close session
+      chat.endSession(prev.id)
+    }
+  },
+)
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+const adjusterId = computed(() => store.adjusterId)
+const { events, connected } = useSSE(adjusterId)
+
+// Only new-assignment events trigger the banner (not status transitions)
+const latestNewAssignmentEvent = ref<AssignmentEvent | null>(null)
+
+watch(events, async (evts) => {
+  const ev = evts[0]
+
+  // Guard: event must have real assignment data (not an empty reconnect artifact)
+  if (!ev || !ev.assignment_id) return
+
+  // Reload store first so we know the real current state
+  if (store.adjuster) {
+    await store.loadActiveAssignment(store.adjuster.id)
+  }
+
+  // Terminal events (cancelled / completed): clear incident marker + route, keep adjuster marker
+  if (ev.status === AssignmentStatus.CANCELLED || ev.status === AssignmentStatus.COMPLETED) {
+    if (map) {
+      if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+      if (incidentMarker) { map.removeLayer(incidentMarker); incidentMarker = null }
+    }
+    incidentMeta.value = { type: null, description: null, address: null, lat: null, lon: null, severity: null }
+    return
+  }
+
+  // Show banner only for new assignments, not for status transitions on existing ones
+  if (ev.event_type === 'assignment.created' || ev.status === AssignmentStatus.ASSIGNED) {
+    latestNewAssignmentEvent.value = ev
+  }
+
+  // Update incident meta from SSE payload (already enriched by notifications service)
+  incidentMeta.value = {
+    type: ev.incident.type ?? null,
+    description: ev.incident.description ?? null,
+    address: ev.incident.address ?? null,
+    lat: ev.incident.latitude ?? null,
+    lon: ev.incident.longitude ?? null,
+    severity: typeof ev.incident.severity === 'number' ? ev.incident.severity : null,
+  }
+
+  // Place marker and draw route
+  if (!map) return
+  const adj = store.adjuster
+  if (ev.incident.latitude && ev.incident.longitude) {
+    if (incidentMarker) map.removeLayer(incidentMarker)
+    incidentMarker = L.marker([ev.incident.latitude, ev.incident.longitude], { icon: incIcon })
+      .bindTooltip(ev.incident.type ?? 'Siniestro')
+      .addTo(map)
+
+    const adjLat = adj?.current_latitude ?? adj?.home_latitude
+    const adjLon = adj?.current_longitude ?? adj?.home_longitude
+    if (adjLat && adjLon) {
+      if (ev.route?.polyline) {
+        // Fast path: polyline already embedded in the SSE payload — no extra fetch needed
+        if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+        const result = routeFromPayload(ev.route.polyline, ev.route.distance_m, ev.route.duration_s, ev.route.traffic_segments)
+        routeLayer = buildRouteLayer(L, result.coords, result.traffic_segments, routeColorIndex++)
+        routeLayer!.addTo(map)
+        const bounds = (routeLayer as L.Polyline).getBounds?.()
+        if (bounds?.isValid()) map.fitBounds(bounds, { padding: [40, 40] })
+      } else {
+        // Fallback: route not yet fetched — call route API
+        await drawRoute(adjLat, adjLon, ev.incident.latitude, ev.incident.longitude)
+      }
+    }
+  }
+})
+
+// ── Completion snackbar ───────────────────────────────────────────────────────
+const completionSnack = ref<{ visible: boolean; text: string; color: string }>({
+  visible: false, text: '', color: 'success',
+})
+
+watch(
+  () => store.activeAssignment,
+  (newVal, oldVal) => {
+    if (!oldVal) return
+    // Assignment just became null — came from a terminal transition
+    if (newVal === null) {
+      const wasCompleted = oldVal.status === AssignmentStatus.COMPLETED
+      completionSnack.value = {
+        visible: true,
+        text: wasCompleted ? '✔ Atención completada. Ajustador disponible.' : '✖ Asignación cancelada.',
+        color: wasCompleted ? 'success' : 'warning',
+      }
+      // Clear only incident marker and route — adjuster marker stays at their position
+      if (map) {
+        if (incidentMarker) { map.removeLayer(incidentMarker); incidentMarker = null }
+        if (routeLayer) { removeRouteLayer(map, routeLayer); routeLayer = null }
+      }
+      incidentMeta.value = { type: null, description: null, address: null, lat: null, lon: null, severity: null }
+    }
+  },
+)
+
+// SSE badge color
+const sseBadgeColor = computed(() => {
+  if (!store.adjuster) return 'grey'
+  return connected.value ? 'success' : 'warning'
+})
+const sseBadgeText = computed(() => {
+  if (!store.adjuster) return 'Sin conexión'
+  return connected.value ? 'Conectado' : 'Reconectando…'
+})
+</script>
+
+<template>
+  <v-app-bar color="surface" elevation="1" density="compact">
+    <v-app-bar-title>
+      <span class="text-body-1 font-weight-bold">Vista Ajustador</span>
+    </v-app-bar-title>
+    <template #append>
+      <v-chip
+        :color="sseBadgeColor"
+        size="x-small"
+        class="mr-2"
+        label
+      >
+        {{ sseBadgeText }}
+      </v-chip>
+    </template>
+  </v-app-bar>
+
+  <v-main>
+    <div class="adjuster-layout">
+      <!-- Sidebar / top panel -->
+      <div class="adjuster-sidebar">
+        <!-- Adjuster selector -->
+        <div class="pa-3">
+          <AdjusterSelector />
+        </div>
+
+        <!-- Adjuster info chip -->
+        <div v-if="store.adjuster" class="px-3 pb-2">
+          <v-chip
+            :color="store.adjuster.status === 'available' ? 'success' : ['busy', 'en_route', 'on_site'].includes(store.adjuster.status) ? 'warning' : 'grey'"
+            size="small"
+            prepend-icon="mdi-account-hard-hat"
+            label
+          >
+            {{ store.adjuster.first_name }} {{ store.adjuster.last_name }}
+          </v-chip>
+        </div>
+
+        <!-- Error state -->
+        <v-alert
+          v-if="store.error"
+          type="error"
+          density="compact"
+          class="mx-3 mb-2"
+          closable
+        >
+          {{ store.error }}
+        </v-alert>
+
+        <!-- No adjuster selected -->
+        <div v-if="!store.adjuster && !store.loading" class="px-3 pb-3">
+          <v-card color="surface" variant="tonal" rounded="lg">
+            <v-card-text class="text-center text-medium-emphasis py-4">
+              <v-icon size="32" class="mb-2">mdi-account-question</v-icon>
+              <div class="text-body-2">Selecciona un ajustador para conectarte al stream de notificaciones</div>
+            </v-card-text>
+          </v-card>
+        </div>
+
+        <!-- Loading -->
+        <div v-if="store.loading" class="px-3 pb-3 text-center">
+          <v-progress-circular indeterminate color="primary" size="24" />
+        </div>
+
+        <!-- Active assignment card -->
+        <div v-if="store.activeAssignment" class="px-3 pb-3">
+          <AssignmentCard
+            :assignment="store.activeAssignment"
+            :incident-lat="incidentMeta.lat"
+            :incident-lon="incidentMeta.lon"
+            :incident-type="incidentMeta.type"
+            :incident-address="incidentMeta.address"
+            :severity="incidentMeta.severity"
+          />
+        </div>
+
+        <!-- Waiting state -->
+        <div
+          v-else-if="store.adjuster && !store.loading"
+          class="px-3 pb-3"
+        >
+          <v-card color="surface" variant="tonal" rounded="lg">
+            <v-card-text class="text-center py-4">
+              <v-icon size="32" color="primary" class="mb-2">mdi-clock-outline</v-icon>
+              <div class="text-body-2 text-medium-emphasis">Esperando asignaciones…</div>
+            </v-card-text>
+          </v-card>
+        </div>
+      </div>
+
+      <!-- Map -->
+      <div ref="mapContainer" class="adjuster-map" />
+    </div>
+  </v-main>
+
+  <!-- SSE new assignment banner (only fires on new assignment, not status transitions) -->
+  <NewAssignmentBanner :event="latestNewAssignmentEvent" />
+
+  <!-- Field Guide agent panel — visible when adjuster has an active assignment -->
+  <AgentPanel :chat="chat" :visible="!!store.activeAssignment" />
+
+  <!-- Completion / cancellation snackbar -->
+  <v-snackbar
+    v-model="completionSnack.visible"
+    location="top"
+    :color="completionSnack.color"
+    timeout="5000"
+    rounded="lg"
+  >
+    {{ completionSnack.text }}
+    <template #actions>
+      <v-btn variant="text" size="small" @click="completionSnack.visible = false">Cerrar</v-btn>
+    </template>
+  </v-snackbar>
+</template>
+
+<style scoped>
+.adjuster-layout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 48px); /* dvh = dynamic viewport height (respects mobile browser chrome) */
+}
+
+.adjuster-sidebar {
+  overflow-y: auto;
+  flex-shrink: 0;
+  max-height: 45dvh;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.adjuster-map {
+  flex: 1;
+  min-height: 0;
+  /* Reserve space for the collapsed agent panel (68px + safe area) */
+  padding-bottom: calc(68px + env(safe-area-inset-bottom));
+}
+
+/* Desktop: side-by-side */
+@media (min-width: 768px) {
+  .adjuster-layout {
+    flex-direction: row;
+  }
+  .adjuster-sidebar {
+    width: 320px;
+    max-height: none;
+    height: 100%;
+    border-bottom: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    overflow-y: auto;
+  }
+  .adjuster-map {
+    flex: 1;
+    height: 100%;
+    /* Panel is fixed over the map — same bottom reserve */
+    padding-bottom: calc(68px + env(safe-area-inset-bottom));
+  }
+}
+</style>

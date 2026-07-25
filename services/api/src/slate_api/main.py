@@ -1,33 +1,44 @@
 """FastAPI main application."""
+
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
+
+from slate_infra.auth import make_verify_google_token, verify_google_token
 
 from .core import close_db, get_logger, init_db, settings, setup_logging
 from .core.exceptions import AppException
-from .core.notifier import start_listener, stop_listener
 from .core.provider_registry import init_provider
 from .routes import (
-    adjuster_positions_router,
-    adjusters_router,
-    assignments_router,
+    agents_router,
     demand_predictions_router,
-    incidents_router,
-    map_router,
-    notifications_router,
+    dispatch_notes_router,
+    dispatches_router,
     recommendations_router,
+    resource_positions_router,
+    resources_router,
     settings_router,
+    tasks_router,
     users_router,
 )
 
 # Setup logging
 setup_logging()
 logger = get_logger(__name__)
+
+# Wire up Google auth dependency.
+# client_ids      → OAuth tokens from frontend apps (admin, adjuster, reporter)
+# allowed_service_audiences → service-to-service tokens from Vertex AI Agent Engine
+#   tools calling slate-api via fetch_id_token(auth_req, "<slate-api-url>").
+#   In production: set GOOGLE_SERVICE_AUDIENCES=https://slate-api-dev-xxx.run.app
+#   In dev: leave empty — verification is skipped when GOOGLE_CLIENT_ID is also empty.
+app_verify_google_token = make_verify_google_token(
+    client_ids=settings.google_client_ids,
+    allowed_service_audiences=settings.google_service_audiences,
+)
 
 
 @asynccontextmanager
@@ -41,16 +52,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting application...")
     await init_db()
     app.state.routing_provider = init_provider(settings)
-    logger.info(
-        "Routing provider initialised: %s", app.state.routing_provider.provider_name
-    )
-    await start_listener(app)
+    logger.info("Routing provider initialised: %s", app.state.routing_provider.provider_name)
 
     yield
 
     # Shutdown
     logger.info("Shutting down application...")
-    await stop_listener(app)
     await close_db()
     logger.info("Application shut down successfully")
 
@@ -61,14 +68,17 @@ app = FastAPI(
     version=settings.VERSION,
     description="Sistema de asignación dinámica de ajustadores de seguros",
     lifespan=lifespan,
-    docs_url="/docs" if settings.DEBUG else None,
-    redoc_url="/redoc" if settings.DEBUG else None,
+    docs_url="/docs" if settings.is_local else None,
+    redoc_url="/redoc" if settings.is_local else None,
 )
+
+# Register Google auth dependency with this service's client IDs
+app.dependency_overrides[verify_google_token] = app_verify_google_token
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -102,22 +112,20 @@ async def health_check() -> dict[str, str]:
     return {"status": "healthy", "version": settings.VERSION}
 
 
-# Static files
-_here = Path(__file__).parent
-app.mount("/static", StaticFiles(directory=_here / "static"), name="static")
+# Auth dependency applied to all API routers — /health is excluded (no prefix)
+_auth = [Depends(verify_google_token)]
 
 # Register routers
-app.include_router(map_router)
-app.include_router(incidents_router, prefix=settings.API_V1_PREFIX)
-app.include_router(adjusters_router, prefix=settings.API_V1_PREFIX)
-app.include_router(assignments_router, prefix=settings.API_V1_PREFIX)
-app.include_router(demand_predictions_router, prefix=settings.API_V1_PREFIX)
-app.include_router(adjuster_positions_router, prefix=settings.API_V1_PREFIX)
-app.include_router(recommendations_router, prefix=settings.API_V1_PREFIX)
-app.include_router(settings_router, prefix=settings.API_V1_PREFIX)
-app.include_router(users_router, prefix=settings.API_V1_PREFIX)
-app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
-
+app.include_router(tasks_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(resources_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(agents_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(dispatches_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(dispatch_notes_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(demand_predictions_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(resource_positions_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(recommendations_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(settings_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
+app.include_router(users_router, prefix=settings.API_V1_PREFIX, dependencies=_auth)
 
 
 if __name__ == "__main__":

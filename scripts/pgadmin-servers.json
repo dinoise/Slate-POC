@@ -2,7 +2,7 @@
   "Servers": {
     "1": {
       "Name": "slate-dev",
-      "Group": "Despacho",
+      "Group": "Slate",
       "Host": "slate-postgres",
       "Port": 5432,
       "MaintenanceDB": "slate_dev",

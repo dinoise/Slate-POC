@@ -1,10 +1,13 @@
 """Repository for DemandPrediction geo queries."""
+
 from geoalchemy2.functions import ST_MakeEnvelope, ST_Within
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.demand_prediction import DemandPrediction
 from .base_repository import BaseRepository
+
+_NO_THRESHOLD = 0.0
 
 
 class DemandPredictionRepository(BaseRepository[DemandPrediction]):
@@ -52,6 +55,7 @@ class DemandPredictionRepository(BaseRepository[DemandPrediction]):
         max_lat: float,
         max_lon: float,
         limit: int = 5000,
+        min_pred_abs: float = _NO_THRESHOLD,
     ) -> list[DemandPrediction]:
         """
         Get demand predictions for a time slot filtered by bounding box.
@@ -64,19 +68,26 @@ class DemandPredictionRepository(BaseRepository[DemandPrediction]):
             max_lat: Maximum latitude (north bound)
             max_lon: Maximum longitude (east bound)
             limit: Maximum number of results
+            min_pred_abs: Minimum demand threshold — rows below this value are
+                excluded at the DB level, reducing serialization cost at
+                wide viewport zoom levels.
 
         Returns:
             List of DemandPrediction instances ordered by pred_abs desc
         """
         # PostGIS ST_MakeEnvelope uses (xmin=lon, ymin=lat, xmax=lon, ymax=lat, srid)
         envelope = ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+        conditions = [
+            DemandPrediction.hora_num == hora_num,
+            DemandPrediction.dia_semana_num == dia_semana_num,
+            ST_Within(DemandPrediction.location, envelope),
+        ]
+        if min_pred_abs > _NO_THRESHOLD:
+            conditions.append(DemandPrediction.pred_abs >= min_pred_abs)
+
         query = (
             select(DemandPrediction)
-            .where(
-                DemandPrediction.hora_num == hora_num,
-                DemandPrediction.dia_semana_num == dia_semana_num,
-                ST_Within(DemandPrediction.location, envelope),
-            )
+            .where(*conditions)
             .order_by(DemandPrediction.pred_abs.desc())
             .limit(limit)
         )

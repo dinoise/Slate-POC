@@ -1,0 +1,10 @@
+.env
+.env.test
+src/slate_agents/.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+dist/
+*.egg-info/
+.adk/

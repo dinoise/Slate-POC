@@ -1,4 +1,5 @@
 """Business logic for User operations."""
+
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,14 +34,12 @@ class UserService:
             raise NotFoundError(f"User {user_id} not found")
         return user
 
-    async def get_all_users(self, skip: int = 0, limit: int = 100) -> list[User]:
-        return await self.repository.get_all(skip=skip, limit=limit)
+    async def get_all_users(self, skip: int = 0, limit: int = 100) -> tuple[list[User], int]:
+        return await self.repository.get_all_paginated(skip=skip, limit=limit)
 
     async def update_user(self, user_id: int, data: UserUpdate) -> User:
         await self.get_user(user_id)
-        updated = await self.repository.update(
-            user_id, **data.model_dump(exclude_unset=True)
-        )
+        updated = await self.repository.update(user_id, **data.model_dump(exclude_unset=True))
         if not updated:
             raise NotFoundError(f"User {user_id} not found")
         return updated

@@ -10,7 +10,7 @@ on:
       node-version:
         required: false
         type: string
-        default: "20"
+        default: "24"
       coverage-threshold:
         required: false
         type: number
@@ -47,15 +47,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Lint (ESLint)
-        run: pnpm --filter $(basename ${{ inputs.app-path }}) lint
+        run: pnpm --filter "@slate/$(basename ${{ inputs.app-path }})" lint
 
       - name: Type check (tsc)
-        run: pnpm --filter $(basename ${{ inputs.app-path }}) type-check
+        run: pnpm --filter "@slate/$(basename ${{ inputs.app-path }})" type-check
 
       - name: Tests con coverage
         id: tests
         run: |
-          pnpm --filter $(basename ${{ inputs.app-path }}) test:coverage
+          pnpm --filter "@slate/$(basename ${{ inputs.app-path }})" test:coverage
           echo "passed=true" >> $GITHUB_OUTPUT
 
       - name: Extraer porcentaje de coverage
@@ -71,11 +71,17 @@ jobs:
           " 2>/dev/null || echo "0")
           echo "percentage=${COVERAGE}" >> $GITHUB_OUTPUT
 
+      - name: Preparar nombre de artifact
+        if: always()
+        run: |
+          SAFE_PATH=$(echo "${{ inputs.app-path }}" | tr '/' '-')
+          echo "ARTIFACT_NAME=coverage-${SAFE_PATH}-${{ github.sha }}" >> "$GITHUB_ENV"
+
       - name: Upload coverage artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ inputs.app-path }}-${{ github.sha }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: ${{ inputs.app-path }}/coverage/
           retention-days: 7
 

@@ -1,9 +1,22 @@
 [tool.uv.workspace]
 members = [
     "services/core",
+    "services/shared-infra",
     "services/api",
     "services/notifications",
     "services/jobs",
+]
+
+# Herramientas de desarrollo compartidas por todos los servicios
+# uv las instala con: uv sync --all-packages (incluye dev groups por defecto)
+[dependency-groups]
+dev = [
+    "ruff>=0.2.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-env>=1.1.0",
+    "pre-commit>=3.6.0",
 ]
 
 [tool.ruff]
@@ -20,13 +33,17 @@ ignore = ["E501", "B008", "W191"]
 "tests/*" = ["S101"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["slate_core", "slate_api", "slate_notifications", "slate_jobs"]
+known-first-party = ["slate_core", "slate_infra", "slate_api", "slate_notifications", "slate_jobs"]
 
 [tool.pytest.ini_options]
 testpaths = ["services"]
-pythonpath = ["."]
+pythonpath = [
+    ".",
+    "services/api",
+    "services/notifications",
+]
 asyncio_mode = "auto"
-addopts = ["--strict-markers", "--strict-config"]
+addopts = ["--strict-markers", "--strict-config", "--import-mode=importlib"]
 env = [
     "ENVIRONMENT=test",
 ]

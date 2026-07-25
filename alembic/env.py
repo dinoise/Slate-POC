@@ -1,16 +1,30 @@
 """Alembic environment configuration for async migrations."""
-import asyncio
-from logging.config import fileConfig
 
-from alembic import context
+import asyncio
+
+# Solo importamos Base (modelos) — no instanciamos Settings completo.
+# DATABASE_URL se valida via alembic/config.py (pydantic-settings).
+# Carga alembic/.env como fallback; si DATABASE_URL ya está en el shell
+# (CI/CD, Docker) pydantic la toma del entorno y el .env se ignora.
+import sys
+from logging.config import fileConfig
+from pathlib import Path as _Path
+
 from geoalchemy2 import alembic_helpers
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# Import your models and config
-from slate_api.core.config import settings
-from slate_api.models.base import Base
+from alembic import context
+
+# Add the alembic/ directory to sys.path so that our local settings.py
+# can be imported without colliding with the installed alembic package.
+sys.path.insert(0, str(_Path(__file__).parent))
+from settings import settings as alembic_settings  # noqa: E402
+
+from slate_core.models.base import Base
+
+_DATABASE_URL = alembic_settings.DATABASE_URL
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -45,7 +59,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = str(settings.DATABASE_URL)
+    url = _DATABASE_URL
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -69,7 +83,13 @@ _OUR_TABLES = {t.name for t in target_metadata.sorted_tables}
 _POSTGIS_SCHEMAS = {"tiger", "tiger_data", "topology"}
 
 # Known PostGIS tables in public schema to exclude
-_POSTGIS_TABLES = {"spatial_ref_sys", "geography_columns", "geometry_columns", "raster_columns", "raster_overviews"}
+_POSTGIS_TABLES = {
+    "spatial_ref_sys",
+    "geography_columns",
+    "geometry_columns",
+    "raster_columns",
+    "raster_overviews",
+}
 
 
 def include_object(object, name, type_, reflected, compare_to):
@@ -79,7 +99,7 @@ def include_object(object, name, type_, reflected, compare_to):
     but not in our models - these are PostGIS system tables that should be ignored.
     """
     # Exclude objects from PostGIS schemas
-    schema = getattr(object, 'schema', None)
+    schema = getattr(object, "schema", None)
     if schema in _POSTGIS_SCHEMAS:
         return False
 
@@ -92,9 +112,9 @@ def include_object(object, name, type_, reflected, compare_to):
             return False
 
     if type_ == "index":
-        table = getattr(object, 'table', None)
+        table = getattr(object, "table", None)
         if table is not None:
-            table_schema = getattr(table, 'schema', None)
+            table_schema = getattr(table, "schema", None)
             if table_schema in _POSTGIS_SCHEMAS:
                 return False
             if table.name in _POSTGIS_TABLES:
@@ -126,7 +146,7 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with async engine."""
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = str(settings.DATABASE_URL)
+    configuration["sqlalchemy.url"] = _DATABASE_URL
 
     connectable = async_engine_from_config(
         configuration,

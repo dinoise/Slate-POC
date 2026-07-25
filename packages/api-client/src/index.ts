@@ -1,0 +1,226 @@
+import type {
+  Incident,
+  Adjuster,
+  AdjusterCreate,
+  AdjusterUpdate,
+  Assignment,
+  AssignmentStatusHistory,
+  AdjusterPosition,
+  DemandPrediction,
+  DemandSlot,
+  User,
+  PaginatedResponse,
+  ProviderSettings,
+  AssignmentStatus,
+  RecommendationRequest,
+  RecommendationResponse,
+  AssignmentEvent,
+} from '@slate/types'
+
+
+// ── Auth token ────────────────────────────────────────────────────────────────
+
+let _authToken: string | null = null
+let _onUnauthorized: (() => void) | null = null
+
+export function setAuthToken(token: string | null): void {
+  _authToken = token
+}
+
+export function getAuthToken(): string | null {
+  return _authToken
+}
+
+/** Register a callback invoked when any API request returns 401. */
+export function onUnauthorized(fn: () => void): void {
+  _onUnauthorized = fn
+}
+
+/** Invoke the registered unauthorized callback (e.g. from SSE composables that detect 401). */
+export function triggerUnauthorized(): void {
+  _onUnauthorized?.()
+}
+
+// ── Base fetch ────────────────────────────────────────────────────────────────
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const baseUrl = (import.meta as ImportMeta & { env: { VITE_API_BASE_URL: string } }).env.VITE_API_BASE_URL ?? ''
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(init?.headers as Record<string, string>),
+  }
+  if (_authToken) {
+    headers['Authorization'] = `Bearer ${_authToken}`
+  }
+  const res = await fetch(`${baseUrl}${path}`, { ...init, headers })
+  if (!res.ok) {
+    if (res.status === 401) {
+      _onUnauthorized?.()
+    }
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? 'API error')
+  }
+  if (res.status === 204) return undefined as T
+  return res.json() as Promise<T>
+}
+
+// ── Incidents ─────────────────────────────────────────────────────────────────
+
+export const incidentsApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return apiFetch<PaginatedResponse<Incident>>(`/api/v1/incidents${qs}`)
+  },
+  get: (id: number) => apiFetch<Incident>(`/api/v1/incidents/${id}`),
+  create: (data: Partial<Incident>) =>
+    apiFetch<Incident>('/api/v1/incidents/', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Incident>) =>
+    apiFetch<Incident>(`/api/v1/incidents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: number) => apiFetch<void>(`/api/v1/incidents/${id}`, { method: 'DELETE' }),
+  nearby: (lat: number, lon: number, radiusKm = 10) =>
+    apiFetch<Incident[]>(`/api/v1/incidents/nearby/?lat=${lat}&lon=${lon}&radius_km=${radiusKm}`),
+}
+
+// ── Adjusters ─────────────────────────────────────────────────────────────────
+
+export const adjustersApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return apiFetch<PaginatedResponse<Adjuster>>(`/api/v1/adjusters${qs}`)
+  },
+  get: (id: number) => apiFetch<Adjuster>(`/api/v1/adjusters/${id}`),
+  create: (data: AdjusterCreate) =>
+    apiFetch<Adjuster>('/api/v1/adjusters/', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: AdjusterUpdate) =>
+    apiFetch<Adjuster>(`/api/v1/adjusters/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: number) => apiFetch<void>(`/api/v1/adjusters/${id}`, { method: 'DELETE' }),
+  available: () => apiFetch<Adjuster[]>('/api/v1/adjusters/available'),
+  resetStatus: () => apiFetch<void>('/api/v1/adjusters/reset-status', { method: 'POST' }),
+}
+
+// ── Assignments ───────────────────────────────────────────────────────────────
+
+export const assignmentsApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return apiFetch<PaginatedResponse<Assignment>>(`/api/v1/assignments${qs}`)
+  },
+  get: (id: number) => apiFetch<Assignment>(`/api/v1/assignments/${id}`),
+  updateStatus: (id: number, status: AssignmentStatus) =>
+    apiFetch<Assignment>(`/api/v1/assignments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  byIncident: (incidentId: number, options?: { active?: boolean }) => {
+    const qs = options?.active ? '?active=true' : ''
+    return apiFetch<Assignment[]>(`/api/v1/assignments/by-incident/${incidentId}${qs}`)
+  },
+  byAdjuster: (adjusterId: number, options?: { active?: boolean }) => {
+    const qs = options?.active ? '?active=true' : ''
+    return apiFetch<Assignment[]>(`/api/v1/assignments/by-adjuster/${adjusterId}${qs}`)
+  },
+  history: (id: number) =>
+    apiFetch<AssignmentStatusHistory[]>(`/api/v1/assignments/${id}/history`),
+  optimize: (data: { use_db?: boolean; incidents?: unknown[]; adjusters?: unknown[] } = { use_db: true }) =>
+    apiFetch<unknown>('/api/v1/assignments/optimize', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+}
+
+// ── Adjuster Positions ────────────────────────────────────────────────────────
+
+export const adjusterPositionsApi = {
+  report: (data: { adjuster_id: number; latitude: number; longitude: number }) =>
+    apiFetch<AdjusterPosition>('/api/v1/adjuster_positions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  latest: (adjusterId: number) =>
+    apiFetch<AdjusterPosition>(`/api/v1/adjuster_positions/${adjusterId}/latest`),
+}
+
+// ── Demand Predictions ────────────────────────────────────────────────────────
+
+export const demandApi = {
+  slots: () =>
+    apiFetch<DemandSlot[]>('/api/v1/demand-predictions/available-slots'),
+  bySlot: (params: { hora_num: number; dia_semana_num: number; bbox: string; min_pred_abs?: number }) => {
+    const qs = new URLSearchParams({
+      hora_num: String(params.hora_num),
+      dia_semana_num: String(params.dia_semana_num),
+      bbox: params.bbox,
+      ...(params.min_pred_abs ? { min_pred_abs: String(params.min_pred_abs) } : {}),
+    }).toString()
+    return apiFetch<DemandPrediction[]>(`/api/v1/demand-predictions?${qs}`)
+  },
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+
+export const usersApi = {
+  list: () => apiFetch<PaginatedResponse<User>>('/api/v1/users/'),
+  get: (id: number) => apiFetch<User>(`/api/v1/users/${id}`),
+  create: (data: Partial<User>) =>
+    apiFetch<User>('/api/v1/users', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<User>) =>
+    apiFetch<User>(`/api/v1/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiFetch<void>(`/api/v1/users/${id}`, { method: 'DELETE' }),
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export const settingsApi = {
+  get: () => apiFetch<ProviderSettings>('/api/v1/settings/provider'),
+  update: (provider: string) =>
+    apiFetch<ProviderSettings>('/api/v1/settings/provider', {
+      method: 'PUT',
+      body: JSON.stringify({ provider }),
+    }),
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+const _notifUrl = () =>
+  (import.meta as ImportMeta & { env: { VITE_NOTIFICATIONS_URL: string } }).env.VITE_NOTIFICATIONS_URL ?? ''
+
+export const notificationsApi = {
+  /** Snapshot of all currently active assignments — same shape as SSE events.
+   *  Call once on mount before opening the SSE stream. Uses Bearer header
+   *  (not ?token=) since this is a regular REST fetch, not EventSource. */
+  observatorySnapshot(): Promise<AssignmentEvent[]> {
+    const headers: Record<string, string> = {}
+    if (_authToken) headers['Authorization'] = `Bearer ${_authToken}`
+    return fetch(`${_notifUrl()}/notifications/snapshot/observatory`, { headers }).then((r) => {
+      if (!r.ok) throw new Error(`snapshot ${r.status}`)
+      return r.json() as Promise<AssignmentEvent[]>
+    })
+  },
+
+  /** Snapshot of currently active assignments for one incident — same shape as
+   *  SSE events from /notifications/stream/incidents/{id}. Call once on mount
+   *  to populate the incident detail map before opening the SSE stream.
+   *  Uses Bearer header (not ?token=) — regular REST fetch, not EventSource. */
+  incidentSnapshot(incidentId: number): Promise<AssignmentEvent[]> {
+    const headers: Record<string, string> = {}
+    if (_authToken) headers['Authorization'] = `Bearer ${_authToken}`
+    return fetch(`${_notifUrl()}/notifications/snapshot/incidents/${incidentId}`, { headers }).then((r) => {
+      if (!r.ok) throw new Error(`snapshot ${r.status}`)
+      return r.json() as Promise<AssignmentEvent[]>
+    })
+  },
+}
+
+// ── Recommendations ───────────────────────────────────────────────────────────
+
+export const recommendationsApi = {
+  generate: (req: RecommendationRequest) =>
+    apiFetch<RecommendationResponse>('/api/v1/recommendations/', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+}
+
+// ── Agents ────────────────────────────────────────────────────────────────────
+
+export { agentsApi } from './agents'

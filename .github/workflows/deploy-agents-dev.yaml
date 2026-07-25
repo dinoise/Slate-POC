@@ -1,0 +1,171 @@
+name: "Deploy — Agents (dev)"
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "services/agents/**"
+      - ".github/workflows/deploy-agents-dev.yaml"
+  workflow_dispatch:
+    inputs:
+      skip-tests:
+        description: "Omitir tests (solo en emergencias)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+  GOOGLE_CLOUD_LOCATION: us-central1
+  ROOT_AGENT_MODEL: gemini-2.5-flash-lite
+
+jobs:
+  # ── 1. Tests ──────────────────────────────────────────────────────────────────
+  test:
+    name: "Test"
+    if: ${{ !inputs.skip-tests }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/agents
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run tests
+        run: uv run pytest tests/ -q --tb=short
+
+  # ── 2. Deploy ─────────────────────────────────────────────────────────────────
+  deploy:
+    name: "Deploy to Agent Engine"
+    needs: [test]
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/agents
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies (with ADK)
+        run: uv sync
+
+
+      - name: Authenticate to GCP (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: poc-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Validate environment
+        run: |
+          uv run python deployment/deploy.py --validate
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ env.GOOGLE_CLOUD_LOCATION }}
+          STAGING_BUCKET: gs://lennken-poc-agents-staging
+          ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
+          SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
+          LOG_LEVEL: "DEBUG"
+          GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY: True
+
+      - name: Resolve existing Agent Engine ID
+        id: resolve
+        shell: bash
+        run: |
+          # Read the existing Agent Engine ID from Secret Manager (if the secret exists).
+          # First deploy creates a new instance; subsequent deploys update the same one.
+          EXISTING_ID=$(gcloud secrets versions access latest \
+            --secret=poc-agents-engine-id-dev \
+            --project=${{ env.GOOGLE_CLOUD_PROJECT }} 2>/dev/null || echo "")
+          echo "existing_id=$EXISTING_ID" >> "$GITHUB_OUTPUT"
+          if [ -n "$EXISTING_ID" ]; then
+            echo "Updating existing Agent Engine: $EXISTING_ID"
+          else
+            echo "No existing Agent Engine found — will create a new one"
+          fi
+
+      - name: Deploy to Vertex AI Agent Engine
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Use deploy.py (Python SDK) instead of adk deploy agent_engine CLI.
+          # The CLI has a bug in 1.31.x where deploymentSpec is always empty,
+          # causing 500 INTERNAL on both CreateReasoningEngine and UpdateReasoningEngine.
+          EXISTING_ID="${{ steps.resolve.outputs.existing_id }}"
+
+          if [ -n "$EXISTING_ID" ]; then
+            AGENT_ENGINE_ID=$(uv run python deployment/deploy.py \
+              --update --resource-id="$EXISTING_ID")
+          else
+            AGENT_ENGINE_ID=$(uv run python deployment/deploy.py --create)
+          fi
+
+          echo "agent_engine_id=$AGENT_ENGINE_ID" >> "$GITHUB_OUTPUT"
+          echo "Deployed Agent Engine ID: $AGENT_ENGINE_ID"
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: "1"
+          GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ env.GOOGLE_CLOUD_LOCATION }}
+          STAGING_BUCKET: gs://lennken-poc-agents-staging
+          ROOT_AGENT_MODEL: ${{ env.ROOT_AGENT_MODEL }}
+          SLATE_API_URL: ${{ secrets.SLATE_API_URL_DEV }}
+          LOG_LEVEL: "DEBUG"
+          GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY: True
+
+      - name: Persist Agent Engine ID to Secret Manager
+        if: steps.deploy.outputs.agent_engine_id != ''
+        shell: bash
+        run: |
+          ID="${{ steps.deploy.outputs.agent_engine_id }}"
+          PROJECT="${{ env.GOOGLE_CLOUD_PROJECT }}"
+          SECRET="poc-agents-engine-id-dev"
+
+          # Create the secret if it doesn't exist yet, then add a new version.
+          # Use user-managed replication in us-central1 (org policy blocks global).
+          if ! gcloud secrets describe "$SECRET" --project="$PROJECT" &>/dev/null; then
+            gcloud secrets create "$SECRET" \
+              --project="$PROJECT" \
+              --replication-policy=user-managed \
+              --locations=us-central1
+          fi
+          echo -n "$ID" | gcloud secrets versions add "$SECRET" \
+            --project="$PROJECT" \
+            --data-file=-
+          echo "Saved Agent Engine ID $ID to secret $SECRET"
+
+      - name: Health check
+        if: steps.deploy.outputs.agent_engine_id != ''
+        run: |
+          uv run python deployment/deploy.py \
+            --health \
+            --resource-id=${{ steps.deploy.outputs.agent_engine_id }}
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ env.GOOGLE_CLOUD_LOCATION }}
+          STAGING_BUCKET: gs://lennken-poc-agents-staging

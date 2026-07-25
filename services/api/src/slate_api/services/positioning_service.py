@@ -1,4 +1,5 @@
 """Greedy positioning algorithm — uses demand_predictions DB table."""
+
 import math
 
 import h3
@@ -7,10 +8,9 @@ from geoalchemy2.functions import ST_GeomFromText, ST_MakePoint, ST_SetSRID
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.adjuster import Adjuster
-from ..models.adjuster_position import AdjusterPosition
-from ..repositories.adjuster_position_repository import AdjusterPositionRepository
+from ..models import Resource, ResourcePosition
 from ..repositories.demand_prediction_repository import DemandPredictionRepository
+from ..repositories.resource_position_repository import ResourcePositionRepository
 from ..schemas.recommendation import (
     RecommendationItem,
     RecommendationRequest,
@@ -25,11 +25,16 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     R = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    )
     return R * 2 * math.asin(math.sqrt(a))
 
 
-def _neighbour_penalty(hex_id: str, reserved: set[str], hex_demand: dict[str, float], k_rings: int) -> float:
+def _neighbour_penalty(
+    hex_id: str, reserved: set[str], hex_demand: dict[str, float], k_rings: int
+) -> float:
     """Sum of pred_abs of reserved hexagons within k_rings H3 rings of hex_id.
 
     This implements the spatial penalty term from the p-median objective:
@@ -106,18 +111,20 @@ def _greedy(
             if current_hex:
                 reserved.discard(current_hex)
             reserved.add(best["h3_r8"])
-            results.append({
-                "adjuster_id": int(adj["adjuster_id"]),
-                "adjuster_name": adj["adjuster_name"],
-                "current_hex": current_hex,
-                "recommended_hex": best["h3_r8"],
-                "recommended_lat": float(best["lat"]),
-                "recommended_lon": float(best["lon"]),
-                "demand_gain": round(float(best_gain), 2),
-                "distance_km": round(best_dist, 2),
-                "eta_min": round(best_dist / SPEED_KMH * 60, 1),
-                "reason": f"demanda predicha {best['pred_abs']:.1f} siniestros, sin cobertura actual",
-            })
+            results.append(
+                {
+                    "adjuster_id": int(adj["adjuster_id"]),
+                    "adjuster_name": adj["adjuster_name"],
+                    "current_hex": current_hex,
+                    "recommended_hex": best["h3_r8"],
+                    "recommended_lat": float(best["lat"]),
+                    "recommended_lon": float(best["lon"]),
+                    "demand_gain": round(float(best_gain), 2),
+                    "distance_km": round(best_dist, 2),
+                    "eta_min": round(best_dist / SPEED_KMH * 60, 1),
+                    "reason": f"demanda predicha {best['pred_abs']:.1f} siniestros, sin cobertura actual",
+                }
+            )
 
     return results
 
@@ -125,21 +132,71 @@ def _greedy(
 class PositioningService:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
-        self._pos_repo = AdjusterPositionRepository(db)
+        self._pos_repo = ResourcePositionRepository(db)
         self._demand_repo = DemandPredictionRepository(db)
+
+    async def _seed_initial_scenario(self) -> list[ResourcePosition]:
+        """Populate scenario='initial' from home_lat/lon of all available resources.
+
+        Called automatically by recommend() when 'initial' has no rows so that
+        the optimizer never fails on first use. Only seeds resources whose
+        status is 'available' and is_active is True — busy/offline resources
+        are intentionally excluded because the optimizer only moves available ones.
+        """
+        from ..repositories.resource_repository import ResourceRepository
+
+        res_repo = ResourceRepository(self._db)
+        # get_available() without lat/lon returns all available resources
+        rows = await res_repo.get_available(limit=500)
+        if not rows:
+            return []
+
+        new_positions: list[ResourcePosition] = []
+        for resource, _cur_lat, _cur_lon in rows:
+            lat = resource.home_latitude
+            lon = resource.home_longitude
+            h3_r8 = h3.latlng_to_cell(lat, lon, 8)
+            wkt = f"POINT({lon} {lat})"
+            new_positions.append(
+                ResourcePosition(
+                    resource_id=resource.id,
+                    lat=lat,
+                    lon=lon,
+                    location=ST_GeomFromText(wkt, 4326),
+                    h3_r8=h3_r8,
+                    scenario="initial",
+                    source="home_location",
+                    demand_score=None,
+                    cluster_id=None,
+                    hora_num=None,
+                    dia_semana_num=None,
+                )
+            )
+        await self._pos_repo.bulk_insert(new_positions)
+        return new_positions
 
     async def recommend(self, req: RecommendationRequest) -> RecommendationResponse:
         positions = await self._pos_repo.get_by_scenario(req.scenario)
         if not positions:
-            raise ValueError(f"Scenario '{req.scenario}' has no positions")
+            if req.scenario == "initial":
+                positions = await self._seed_initial_scenario()
+            if not positions:
+                raise ValueError(f"Scenario '{req.scenario}' has no positions")
 
-        adj_df = pd.DataFrame([{
-            "adjuster_id": p.adjuster_id,
-            "adjuster_name": p.adjuster.full_name if p.adjuster else f"Ajustador {p.adjuster_id}",
-            "lat": p.lat,
-            "lon": p.lon,
-            "h3_r8": p.h3_r8,
-        } for p in positions])
+        adj_df = pd.DataFrame(
+            [
+                {
+                    "adjuster_id": p.resource_id,
+                    "adjuster_name": p.resource.full_name
+                    if p.resource
+                    else f"Resource {p.resource_id}",
+                    "lat": p.lat,
+                    "lon": p.lon,
+                    "h3_r8": p.h3_r8,
+                }
+                for p in positions
+            ]
+        )
 
         demand_preds = await self._demand_repo.get_by_slot(
             hora_num=req.hora_num,
@@ -152,12 +209,17 @@ class PositioningService:
                 "Run scripts/generate_demand_predictions.py first."
             )
 
-        demand_df = pd.DataFrame([{
-            "h3_r8": p.h3_r8,
-            "pred_abs": p.pred_abs,
-            "lat": p.lat,
-            "lon": p.lon,
-        } for p in demand_preds])
+        demand_df = pd.DataFrame(
+            [
+                {
+                    "h3_r8": p.h3_r8,
+                    "pred_abs": p.pred_abs,
+                    "lat": p.lat,
+                    "lon": p.lon,
+                }
+                for p in demand_preds
+            ]
+        )
 
         raw = _greedy(
             adj_df,
@@ -187,18 +249,18 @@ class PositioningService:
     async def _save_recommendations(
         self,
         req: RecommendationRequest,
-        original_positions: list[AdjusterPosition],
+        original_positions: list[ResourcePosition],
         recs: list[dict],
         scenario_name: str,
     ) -> None:
         await self._pos_repo.delete_scenario(scenario_name)
 
-        rec_by_adjuster_id = {r["adjuster_id"]: r for r in recs}
+        rec_by_resource_id = {r["adjuster_id"]: r for r in recs}
 
-        new_positions: list[AdjusterPosition] = []
+        new_positions: list[ResourcePosition] = []
         for orig in original_positions:
-            if orig.adjuster_id in rec_by_adjuster_id:
-                rec = rec_by_adjuster_id[orig.adjuster_id]
+            if orig.resource_id in rec_by_resource_id:
+                rec = rec_by_resource_id[orig.resource_id]
                 lat = rec["recommended_lat"]
                 lon = rec["recommended_lon"]
                 h3_r8 = h3.latlng_to_cell(lat, lon, 8)
@@ -214,30 +276,32 @@ class PositioningService:
                 cluster_id = orig.cluster_id
 
             wkt = f"POINT({lon} {lat})"
-            new_positions.append(AdjusterPosition(
-                adjuster_id=orig.adjuster_id,
-                lat=lat,
-                lon=lon,
-                location=ST_GeomFromText(wkt, 4326),
-                h3_r8=h3_r8,
-                scenario=scenario_name,
-                source=source,
-                demand_score=demand_score,
-                cluster_id=cluster_id,
-                hora_num=req.hora_num,
-                dia_semana_num=req.dia_semana_num,
-            ))
+            new_positions.append(
+                ResourcePosition(
+                    resource_id=orig.resource_id,
+                    lat=lat,
+                    lon=lon,
+                    location=ST_GeomFromText(wkt, 4326),
+                    h3_r8=h3_r8,
+                    scenario=scenario_name,
+                    source=source,
+                    demand_score=demand_score,
+                    cluster_id=cluster_id,
+                    hora_num=req.hora_num,
+                    dia_semana_num=req.dia_semana_num,
+                )
+            )
 
         await self._pos_repo.bulk_insert(new_positions)
 
-        # Update home_location on adjusters that moved so that
+        # Update home_location on resources that moved so that
         # GET /adjusters/available/ reflects their new position
         for rec in recs:
             lat = rec["recommended_lat"]
             lon = rec["recommended_lon"]
             await self._db.execute(
-                update(Adjuster)
-                .where(Adjuster.id == rec["adjuster_id"])
+                update(Resource)
+                .where(Resource.id == rec["adjuster_id"])
                 .values(
                     home_latitude=lat,
                     home_longitude=lon,

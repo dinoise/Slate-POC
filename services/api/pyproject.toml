@@ -1,11 +1,12 @@
 [project]
 name = "slate-api"
 version = "0.1.0"
-description = "FastAPI service for Despacho — incident dispatch and adjuster assignment"
+description = "FastAPI service for Slate — incident dispatch and adjuster assignment"
 requires-python = ">=3.11"
 dependencies = [
     # Internal workspace packages
     "slate-core",
+    "slate-infra",
     # FastAPI Core
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.27.0",
@@ -20,6 +21,11 @@ dependencies = [
     "redis[hiredis]>=5.0.0",
     # HTTP Client
     "httpx>=0.26.0",
+    # Google Auth — verificación de ID tokens de GIS (requests extra incluye transport HTTP)
+    "google-auth[requests]>=2.28.0",
+    # Vertex AI / Agent Engine — cliente de streaming para los sub-agentes AI
+    "google-cloud-aiplatform[adk,agent-engines]>=1.118.0",
+    "google-adk>=1.31.1",
     # Utilities
     "python-multipart>=0.0.9",
     "python-jose[cryptography]>=3.3.0",
@@ -47,3 +53,9 @@ packages = ["src/slate_api"]
 
 [tool.uv.sources]
 slate-core = { workspace = true }
+slate-infra = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "testcontainers[postgres]>=4.14.2",
+]

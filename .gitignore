@@ -20,6 +20,10 @@ node_modules/
 .pnpm-store/
 apps/*/dist/
 apps/*/coverage/
+apps/*/.playwright/
+apps/*/test-results/
+apps/*/playwright-report/
+apps/*/blob-report/
 packages/*/dist/
 
 # ── Variables de entorno ──────────────────────────────────────────────────────
@@ -28,6 +32,12 @@ packages/*/dist/
 !.env.example
 apps/*/.env*
 !apps/*/.env.example
+services/*/.env
+services/*/.env.*
+!services/*/.env.example
+alembic/.env
+alembic/.env.*
+!alembic/.env.example
 
 # ── Datos y modelos ML ────────────────────────────────────────────────────────
 data/osrm/
@@ -71,3 +81,6 @@ redis-data/
 # ── Logs ─────────────────────────────────────────────────────────────────────
 *.log
 logs/
+
+# ── Postman ───────────────────────────────────────────────────────────────────
+services/api/postman/

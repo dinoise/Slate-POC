@@ -1,9 +1,11 @@
 [project]
 name = "slate-core"
 version = "0.1.0"
-description = "Shared geospatial and optimization library for Despacho"
+description = "Shared geospatial and optimization library for Slate"
 requires-python = ">=3.11"
 dependencies = [
+    # Database / ORM
+    "sqlalchemy[asyncio]>=2.0.0",
     # Geospatial
     "geoalchemy2>=0.14.0",
     "shapely>=2.0.0",

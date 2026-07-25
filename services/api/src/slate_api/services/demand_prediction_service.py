@@ -1,4 +1,5 @@
 """Business logic for DemandPrediction queries."""
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.exceptions import ValidationError
@@ -28,6 +29,7 @@ class DemandPredictionService:
         max_lat: float,
         max_lon: float,
         limit: int = MAX_LIMIT,
+        min_pred_abs: float = 0.0,
     ) -> list[DemandPrediction]:
         """
         Get demand predictions for a time slot within a bounding box.
@@ -40,6 +42,9 @@ class DemandPredictionService:
             max_lat: North bound latitude
             max_lon: East bound longitude
             limit: Max results (capped at MAX_LIMIT)
+            min_pred_abs: Minimum demand threshold — excludes low-demand hexagons
+                at the DB level. Clients should send a higher value at wide
+                viewports (low zoom) to reduce response size.
 
         Returns:
             List of DemandPrediction instances
@@ -62,4 +67,5 @@ class DemandPredictionService:
             max_lat=max_lat,
             max_lon=max_lon,
             limit=limit,
+            min_pred_abs=max(0.0, min_pred_abs),
         )

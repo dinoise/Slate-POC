@@ -1,4 +1,5 @@
 """Factory for instantiating the configured RoutingProvider."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

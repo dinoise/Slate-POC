@@ -1,10 +1,10 @@
 """Database connection and session management."""
+
+import logging
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends
-import logging
-
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,

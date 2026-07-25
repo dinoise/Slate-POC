@@ -1,4 +1,5 @@
 """OR-Tools LinearSumAssignment solver for adjuster-to-incident assignment."""
+
 import logging
 from dataclasses import dataclass
 

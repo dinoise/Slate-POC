@@ -1,4 +1,5 @@
 """Settings routes — runtime configuration (provider switching, etc.)."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, status

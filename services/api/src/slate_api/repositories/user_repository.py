@@ -1,4 +1,5 @@
 """Repository for User model."""
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +18,5 @@ class UserRepository(BaseRepository[User]):
         return result.scalar_one_or_none()
 
     async def get_by_external_id(self, external_id: str) -> User | None:
-        result = await self.db.execute(
-            select(User).where(User.external_id == external_id)
-        )
+        result = await self.db.execute(select(User).where(User.external_id == external_id))
         return result.scalar_one_or_none()

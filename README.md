@@ -242,6 +242,30 @@ uv run ruff check services/
 uv run ruff format services/
 ```
 
+### Pre-commit (recomendado)
+
+El repo incluye configuración de [pre-commit](https://pre-commit.com/) que corre ruff automáticamente antes de cada `git commit`. Instálalo una vez después de clonar:
+
+```bash
+uv run pre-commit install
+```
+
+A partir de ahí, cada `git commit` ejecuta lint y format automáticamente. Si algún archivo se modifica, el commit se cancela para que puedas revisar los cambios — simplemente vuelve a stagear y commitear:
+
+```bash
+git commit -m "mi cambio"
+# pre-commit formatea archivos → commit cancelado
+
+git add -A
+git commit -m "mi cambio"   # pasa limpio
+```
+
+Para correr manualmente sobre todos los archivos:
+
+```bash
+uv run pre-commit run --all-files
+```
+
 ---
 
 ## Infraestructura (GCP)

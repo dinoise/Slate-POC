@@ -31,10 +31,10 @@ on:
     outputs:
       image-tag:
         value: ${{ jobs.build.outputs.image-tag }}
-      image-full:
-        value: ${{ jobs.build.outputs.image-full }}
       service-name:
         value: ${{ jobs.build.outputs.service-name }}
+      registry:
+        value: ${{ jobs.build.outputs.registry }}
 
 jobs:
   build:
@@ -42,8 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.image-tag }}
-      image-full: ${{ steps.meta.outputs.image-full }}
       service-name: ${{ steps.meta.outputs.service-name }}
+      registry: ${{ steps.meta.outputs.registry }}
 
     steps:
       - uses: actions/checkout@v4
@@ -55,10 +55,11 @@ jobs:
           TIMESTAMP=$(date +%s)
           IMAGE_TAG="${{ inputs.tag }}-${SHORT_SHA}-${TIMESTAMP}"
           SERVICE_NAME=$(basename ${{ inputs.service-path }})
-          IMAGE_FULL="${{ inputs.registry }}/${{ secrets.project-id }}/slate/${SERVICE_NAME}:${IMAGE_TAG}"
+          IMAGE_FULL="${{ inputs.registry }}/${{ secrets.project-id }}/poc-images/${SERVICE_NAME}:${IMAGE_TAG}"
           echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "image-full=${IMAGE_FULL}" >> $GITHUB_OUTPUT
           echo "service-name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
+          echo "registry=${{ inputs.registry }}" >> $GITHUB_OUTPUT
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🐳 Image: ${IMAGE_FULL}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
